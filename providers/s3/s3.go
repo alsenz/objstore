@@ -532,7 +532,11 @@ func (b *Bucket) Exists(ctx context.Context, name string) (bool, error) {
 }
 
 // Upload the contents of the reader as an object into the bucket.
-func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader) error {
+func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.WriteOption) error {
+	//TODO support to the extent possible
+	if err := objstore.ValidateWriteOptions(b.SupportedWriteOptions(), options...); err != nil {
+		return err
+	}
 	sse, err := b.getServerSideEncryption(ctx)
 	if err != nil {
 		return err
@@ -579,6 +583,10 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader) error {
 	}
 
 	return nil
+}
+
+func (b *Bucket) SupportedWriteOptions() []objstore.WriteOptionType {
+	return []objstore.WriteOptionType{}
 }
 
 // Attributes returns information about the specified object.

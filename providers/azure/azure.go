@@ -365,7 +365,12 @@ func (b *Bucket) Exists(ctx context.Context, name string) (bool, error) {
 }
 
 // Upload the contents of the reader as an object into the bucket.
-func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader) error {
+func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.WriteOption) error {
+	//TODO: add support for azure before PR.
+	if err := objstore.ValidateWriteOptions(b.SupportedWriteOptions(), options...); err != nil {
+		return err
+	}
+
 	level.Debug(b.logger).Log("msg", "uploading blob", "blob", name)
 	blobClient := b.containerClient.NewBlockBlobClient(name)
 	opts := &blockblob.UploadStreamOptions{
@@ -376,6 +381,10 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader) error {
 		return errors.Wrapf(err, "cannot upload Azure blob, address: %s", name)
 	}
 	return nil
+}
+
+func (b *Bucket) SupportedWriteOptions() []objstore.WriteOptionType {
+	return []objstore.WriteOptionType{}
 }
 
 // Delete removes the object with the given name.

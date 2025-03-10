@@ -56,6 +56,10 @@ func (t TracingBucket) SupportedIterOptions() []objstore.IterOptionType {
 	return t.bkt.SupportedIterOptions()
 }
 
+func (t TracingBucket) SupportedWriteOptions() []objstore.WriteOptionType {
+	return t.bkt.SupportedWriteOptions()
+}
+
 func (t TracingBucket) Get(ctx context.Context, name string) (io.ReadCloser, error) {
 	ctx, span := t.tracer.Start(ctx, "bucket_get")
 	defer span.End()
@@ -110,7 +114,7 @@ func (t TracingBucket) Attributes(ctx context.Context, name string) (_ objstore.
 	return t.bkt.Attributes(ctx, name)
 }
 
-func (t TracingBucket) Upload(ctx context.Context, name string, r io.Reader) (err error) {
+func (t TracingBucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.WriteOption) (err error) {
 	ctx, span := t.tracer.Start(ctx, "bucket_upload")
 	defer span.End()
 	span.SetAttributes(attribute.String("name", name))
@@ -120,7 +124,7 @@ func (t TracingBucket) Upload(ctx context.Context, name string, r io.Reader) (er
 			span.RecordError(err)
 		}
 	}()
-	return t.bkt.Upload(ctx, name, r)
+	return t.bkt.Upload(ctx, name, r, options...)
 }
 
 func (t TracingBucket) Delete(ctx context.Context, name string) (err error) {

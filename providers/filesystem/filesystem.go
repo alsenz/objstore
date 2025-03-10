@@ -247,7 +247,12 @@ func (b *Bucket) Exists(ctx context.Context, name string) (bool, error) {
 }
 
 // Upload writes the file specified in src to into the memory.
-func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader) (err error) {
+func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.WriteOption) (err error) {
+	//TODO add support for filesystem write conditions
+	if err := objstore.ValidateWriteOptions(b.SupportedWriteOptions(), options...); err != nil {
+		return err
+	}
+
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -267,6 +272,10 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader) (err erro
 		return errors.Wrapf(err, "copy to %s", file)
 	}
 	return nil
+}
+
+func (b *Bucket) SupportedWriteOptions() []objstore.WriteOptionType {
+	return []objstore.WriteOptionType{}
 }
 
 func isDirEmpty(name string) (ok bool, err error) {

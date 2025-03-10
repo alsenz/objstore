@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -269,6 +270,73 @@ func AcceptanceTest(t *testing.T, bkt Bucket) {
 
 	testutil.Ok(t, bkt.Upload(ctx, "obj_6.som", bytes.NewReader(make([]byte, 1024*1024*200))))
 	testutil.Ok(t, bkt.Delete(ctx, "obj_6.som"))
+
+	// If supported, test IfNotExists write option
+	if slices.Contains(bkt.SupportedWriteOptions(), IfNotExists) {
+		testutil.Ok(t, bkt.Upload(ctx, "obj_7.some", strings.NewReader("@test-data7@"), WithIfNotExists()))
+		// Can't and won't write if object exists
+		testutil.NotOk(t, bkt.Upload(ctx, "obj_7.some", strings.NewReader("@test-data7.2@")), WithIfNotExists())
+		rc7, err := bkt.Get(ctx, "obj_7.some")
+		testutil.Ok(t, err)
+		content, err = io.ReadAll(rc7)
+		testutil.Ok(t, err)
+		testutil.Equals(t, "@test-data7@", string(content))
+		// But can write without this option...
+		testutil.Ok(t, bkt.Upload(ctx, "obj_7.some", strings.NewReader("@test-data7.3@")))
+		// Check the first contents are now written
+		rc7, err = bkt.Get(ctx, "obj_7.some")
+		testutil.Ok(t, err)
+		content, err = io.ReadAll(rc7)
+		testutil.Ok(t, err)
+		testutil.Equals(t, "@test-data7.3@", string(content))
+		// Delete
+		testutil.Ok(t, bkt.Delete(ctx, "obj_7.some"))
+	}
+
+	// If supported, test IfMatch write option
+	if slices.Contains(bkt.SupportedWriteOptions(), IfMatch) {
+		testutil.Ok(t, bkt.Upload(ctx, "obj_8.some", strings.NewReader("@test-data8@")))
+		// Can't and won't write if version doesn't match dummy version
+		nullVer := &ObjectVersion{ETag, "dummy"}
+		testutil.NotOk(t, bkt.Upload(ctx, "obj_8.some", strings.NewReader("@test-data8.2@")), WithIfMatch(nullVer))
+		rc8, err := bkt.Get(ctx, "obj_8.some")
+		testutil.Ok(t, err)
+		content, err = io.ReadAll(rc8)
+		testutil.Ok(t, err)
+		testutil.Equals(t, "@test-data8@", string(content))
+		// Can write if version matches
+		currentAttrs, err := bkt.Attributes(ctx, "obj_8.some")
+		testutil.Ok(t, err)
+		testutil.Ok(t, bkt.Upload(ctx, "obj_8.some", strings.NewReader("@test-data8.3@"), WithIfMatch(currentAttrs.Version)))
+		rc8, err = bkt.Get(ctx, "obj_8.some")
+		testutil.Ok(t, err)
+		content, err = io.ReadAll(rc8)
+		testutil.Ok(t, err)
+		testutil.Equals(t, "@test-data8.3@", string(content))
+		// Delete
+		testutil.Ok(t, bkt.Delete(ctx, "obj_8.some"))
+	}
+
+	// If supported, test IfNotMatch write option
+	if slices.Contains(bkt.SupportedWriteOptions(), IfNotMatch) {
+		testutil.Ok(t, bkt.Upload(ctx, "obj_9.some", strings.NewReader("@test-data9@")))
+		firstAttrs, err := bkt.Attributes(ctx, "obj_9.some")
+		testutil.Ok(t, err)
+		// Can't write if the object versions match
+		testutil.NotOk(t, bkt.Upload(ctx, "obj_9.some", strings.NewReader("@test-data9.2@"), WithIfNotMatch(firstAttrs.Version)))
+		// Update the object
+		testutil.Ok(t, bkt.Upload(ctx, "obj_9.some", strings.NewReader("@test-data9.3@")))
+		// Update it again now the different version is different
+		testutil.NotOk(t, bkt.Upload(ctx, "obj_9.some", strings.NewReader("@test-data9.4@"), WithIfNotMatch(firstAttrs.Version)))
+		rc9, err := bkt.Get(ctx, "obj_8.some")
+		testutil.Ok(t, err)
+		content, err = io.ReadAll(rc9)
+		testutil.Ok(t, err)
+		testutil.Equals(t, "@test-data9.4@", string(content))
+		// Delete
+		testutil.Ok(t, bkt.Delete(ctx, "obj_9.some"))
+	}
+
 }
 
 type delayingBucket struct {
@@ -306,6 +374,10 @@ func (d *delayingBucket) SupportedIterOptions() []IterOptionType {
 	return d.bkt.SupportedIterOptions()
 }
 
+func (d *delayingBucket) SupportedWriteOptions() []WriteOptionType {
+	return d.bkt.SupportedWriteOptions()
+}
+
 func (d *delayingBucket) GetRange(ctx context.Context, name string, off, length int64) (io.ReadCloser, error) {
 	time.Sleep(d.delay)
 	return d.bkt.GetRange(ctx, name, off, length)
@@ -316,9 +388,9 @@ func (d *delayingBucket) Exists(ctx context.Context, name string) (bool, error) 
 	return d.bkt.Exists(ctx, name)
 }
 
-func (d *delayingBucket) Upload(ctx context.Context, name string, r io.Reader) error {
+func (d *delayingBucket) Upload(ctx context.Context, name string, r io.Reader, options ...WriteOption) error {
 	time.Sleep(d.delay)
-	return d.bkt.Upload(ctx, name, r)
+	return d.bkt.Upload(ctx, name, r, options...)
 }
 
 func (d *delayingBucket) Delete(ctx context.Context, name string) error {

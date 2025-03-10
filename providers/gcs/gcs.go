@@ -332,7 +332,12 @@ func (b *Bucket) Exists(ctx context.Context, name string) (bool, error) {
 }
 
 // Upload writes the file specified in src to remote GCS location specified as target.
-func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader) error {
+func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.WriteOption) error {
+	//TODO add support for filesystem write conditions
+	if err := objstore.ValidateWriteOptions(b.SupportedWriteOptions(), options...); err != nil {
+		return err
+	}
+
 	w := b.bkt.Object(name).NewWriter(ctx)
 
 	// if `chunkSize` is 0, we don't set any custom value for writer's ChunkSize.
@@ -345,6 +350,10 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader) error {
 		return err
 	}
 	return w.Close()
+}
+
+func (b *Bucket) SupportedWriteOptions() []objstore.WriteOptionType {
+	return []objstore.WriteOptionType{}
 }
 
 // Delete removes the object with the given name.

@@ -213,7 +213,11 @@ func (r fixedLengthReader) Size() int64 {
 }
 
 // Upload the contents of the reader as an object into the bucket.
-func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader) error {
+func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.WriteOption) error {
+	if err := objstore.ValidateWriteOptions(b.SupportedWriteOptions(), options...); err != nil {
+		return err
+	}
+
 	size, err := objstore.TryToGetSize(r)
 	if err != nil {
 		return errors.Wrapf(err, "getting size of %s", name)
@@ -281,6 +285,10 @@ func (b *Bucket) Delete(ctx context.Context, name string) error {
 		return errors.Wrap(err, "delete cos object")
 	}
 	return nil
+}
+
+func (b *Bucket) SupportedWriteOptions() []objstore.WriteOptionType {
+	return []objstore.WriteOptionType{}
 }
 
 func (b *Bucket) SupportedIterOptions() []objstore.IterOptionType {

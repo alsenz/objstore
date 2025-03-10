@@ -71,7 +71,10 @@ func NewTestBucket(t testing.TB) (objstore.Bucket, func(), error) {
 func (b *Bucket) Provider() objstore.ObjProvider { return objstore.ALIYUNOSS }
 
 // Upload the contents of the reader as an object into the bucket.
-func (b *Bucket) Upload(_ context.Context, name string, r io.Reader) error {
+func (b *Bucket) Upload(_ context.Context, name string, r io.Reader, options ...objstore.WriteOption) error {
+	if err := objstore.ValidateWriteOptions(b.SupportedWriteOptions(), options...); err != nil {
+		return err
+	}
 	// TODO(https://github.com/thanos-io/thanos/issues/678): Remove guessing length when minio provider will support multipart upload without this.
 	size, err := objstore.TryToGetSize(r)
 	if err != nil {
@@ -125,6 +128,10 @@ func (b *Bucket) Upload(_ context.Context, name string, r io.Reader) error {
 		}
 	}
 	return nil
+}
+
+func (b *Bucket) SupportedWriteOptions() []objstore.WriteOptionType {
+	return []objstore.WriteOptionType{}
 }
 
 // Delete removes the object with the given name.

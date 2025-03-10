@@ -275,7 +275,8 @@ func AcceptanceTest(t *testing.T, bkt Bucket) {
 	if slices.Contains(bkt.SupportedWriteOptions(), IfNotExists) {
 		testutil.Ok(t, bkt.Upload(ctx, "obj_7.some", strings.NewReader("@test-data7@"), WithIfNotExists()))
 		// Can't and won't write if object exists
-		testutil.NotOk(t, bkt.Upload(ctx, "obj_7.some", strings.NewReader("@test-data7.2@")), WithIfNotExists())
+		//TODO this line is broken
+		testutil.NotOk(t, bkt.Upload(ctx, "obj_7.some", strings.NewReader("@test-data7.2@"), WithIfNotExists()))
 		rc7, err := bkt.Get(ctx, "obj_7.some")
 		testutil.Ok(t, err)
 		content, err = io.ReadAll(rc7)
@@ -298,7 +299,7 @@ func AcceptanceTest(t *testing.T, bkt Bucket) {
 		testutil.Ok(t, bkt.Upload(ctx, "obj_8.some", strings.NewReader("@test-data8@")))
 		// Can't and won't write if version doesn't match dummy version
 		nullVer := &ObjectVersion{ETag, "dummy"}
-		testutil.NotOk(t, bkt.Upload(ctx, "obj_8.some", strings.NewReader("@test-data8.2@")), WithIfMatch(nullVer))
+		testutil.NotOk(t, bkt.Upload(ctx, "obj_8.some", strings.NewReader("@test-data8.2@"), WithIfMatch(nullVer)))
 		rc8, err := bkt.Get(ctx, "obj_8.some")
 		testutil.Ok(t, err)
 		content, err = io.ReadAll(rc8)

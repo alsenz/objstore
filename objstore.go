@@ -292,7 +292,7 @@ func WithIfNotMatch(ver *ObjectVersion) WriteOption {
 func ValidateWriteOptions(supportedOptions []WriteOptionType, options ...WriteOption) error {
 	for _, opt := range options {
 		if !slices.Contains(supportedOptions, opt.Type) {
-			return fmt.Errorf("%w: %v", ErrWriteOptionNotSupported, opt.Type)
+			return fmt.Errorf("%w: %d", ErrWriteOptionNotSupported, opt.Type)
 		}
 		if opt.Type == IfMatch || opt.Type == IfNotMatch {
 			candidate := &writeParams{}

@@ -275,7 +275,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 }
 
 func (b *Bucket) SupportedWriteOptions() []objstore.WriteOptionType {
-	return []objstore.WriteOptionType{}
+	return []objstore.WriteOptionType{objstore.IfNotExists}
 }
 
 func isDirEmpty(name string) (ok bool, err error) {

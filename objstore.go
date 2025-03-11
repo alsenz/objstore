@@ -64,7 +64,7 @@ type Bucket interface {
 	// Upload should be idempotent.
 	Upload(ctx context.Context, name string, r io.Reader, options ...WriteOption) error
 
-	//TODO I have a feeling that this is going to be a bit much to have two kinds of write condition
+	//TODO I have a feeling that this is going to be a bit much to have two kinds of write Condition
 	//TODO so instead, let's just have a single WriteOptions business...
 	//TODO or we do flags... IfNotMatch, IfMatch, IfNotExists
 	//TODO then maybe object version is just part of conditions.... yup, that's the way...
@@ -251,21 +251,21 @@ const (
 
 type WriteOption struct {
 	Type  WriteOptionType
-	Apply func(params *writeParams)
+	Apply func(params *WriteParams)
 }
 
-// writeParams hold conditional write attribute metadata
-type writeParams struct {
-	ifNotExists bool
-	ifNotMatch  bool
-	condition   *ObjectVersion
+// WriteParams hold conditional write attribute metadata
+type WriteParams struct {
+	IfNotExists bool
+	IfNotMatch  bool
+	Condition   *ObjectVersion
 }
 
 func WithIfNotExists() WriteOption {
 	return WriteOption{
 		Type: IfNotExists,
-		Apply: func(params *writeParams) {
-			params.ifNotExists = true
+		Apply: func(params *WriteParams) {
+			params.IfNotExists = true
 		},
 	}
 }
@@ -273,8 +273,8 @@ func WithIfNotExists() WriteOption {
 func WithIfMatch(ver *ObjectVersion) WriteOption {
 	return WriteOption{
 		Type: IfMatch,
-		Apply: func(params *writeParams) {
-			params.condition = ver
+		Apply: func(params *WriteParams) {
+			params.Condition = ver
 		},
 	}
 }
@@ -282,9 +282,9 @@ func WithIfMatch(ver *ObjectVersion) WriteOption {
 func WithIfNotMatch(ver *ObjectVersion) WriteOption {
 	return WriteOption{
 		Type: IfNotMatch,
-		Apply: func(params *writeParams) {
-			params.condition = ver
-			params.ifNotMatch = true
+		Apply: func(params *WriteParams) {
+			params.Condition = ver
+			params.IfNotMatch = true
 		},
 	}
 }
@@ -295,14 +295,22 @@ func ValidateWriteOptions(supportedOptions []WriteOptionType, options ...WriteOp
 			return fmt.Errorf("%w: %d", ErrWriteOptionNotSupported, opt.Type)
 		}
 		if opt.Type == IfMatch || opt.Type == IfNotMatch {
-			candidate := &writeParams{}
+			candidate := &WriteParams{}
 			opt.Apply(candidate)
-			if candidate.condition == nil {
-				return fmt.Errorf("%w: condition nil", ErrWriteOptionInvalid)
+			if candidate.Condition == nil {
+				return fmt.Errorf("%w: Condition nil", ErrWriteOptionInvalid)
 			}
 		}
 	}
 	return nil
+}
+
+func ApplyWriteOptions(options ...WriteOption) WriteParams {
+	out := WriteParams{}
+	for _, opt := range options {
+		opt.Apply(&out)
+	}
+	return out
 }
 
 // UploadOption configures the provided params.

@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/efficientgo/core/errcapture"
 	"github.com/pkg/errors"
@@ -248,7 +249,7 @@ func (b *Bucket) Exists(ctx context.Context, name string) (bool, error) {
 
 // Upload writes the file specified in src to into the memory.
 func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.WriteOption) (err error) {
-	//TODO add support for filesystem write conditions
+
 	if err := objstore.ValidateWriteOptions(b.SupportedWriteOptions(), options...); err != nil {
 		return err
 	}
@@ -258,23 +259,55 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 	}
 
 	file := filepath.Join(b.rootDir, name)
+	swap := filepath.Join(b.rootDir, fmt.Sprintf("%s.swap", name))
 	if err := os.MkdirAll(filepath.Dir(file), os.ModePerm); err != nil {
 		return err
 	}
 
-	f, err := os.Create(file)
+	params := objstore.ApplyWriteOptions(options...)
+
+	//TODO support versions somehow...
+
+	// Exclusive creation of swap file is used as protection against concurrent writes
+	//TODO: somehow loop trying to create this file effectively as an flock...
+	swf, err := os.OpenFile(swap, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
+		return err
+	}
+	defer errcapture.Do(&err, swf.Close, "close")
+
+	// File is opened to safely ensure IfNotExists if applicable
+	flags := os.O_RDWR | os.O_CREATE
+	if params.IfNotExists {
+		flags |= os.O_EXCL
+	} else {
+		flags |= os.O_TRUNC
+	}
+	f, err := os.OpenFile(file, flags, 0666)
+	if err != nil {
+		_ = os.Remove(swap)
 		return err
 	}
 	defer errcapture.Do(&err, f.Close, "close")
 
-	if _, err := io.Copy(f, r); err != nil {
-		return errors.Wrapf(err, "copy to %s", file)
+	if _, err := io.Copy(swf, r); err != nil {
+		_ = os.Remove(swap)
+		return errors.Wrapf(err, "copy to %s", swap)
 	}
+	// Move swap into target, atomic on unix for which IfNotExists is supported.
+	if err := os.Rename(swap, file); err != nil {
+		_ = os.Remove(swap)
+		return err
+	}
+
 	return nil
 }
 
 func (b *Bucket) SupportedWriteOptions() []objstore.WriteOptionType {
+	if runtime.GOOS == "windows" {
+		// Moves are not guaranteed to be atomic
+		return []objstore.WriteOptionType{}
+	}
 	return []objstore.WriteOptionType{objstore.IfNotExists}
 }
 

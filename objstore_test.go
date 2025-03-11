@@ -28,6 +28,8 @@ func TestMetricBucket_Close(t *testing.T) {
 	testutil.Equals(t, 7, promtest.CollectAndCount(bkt.metrics.opsFailures))
 	testutil.Equals(t, 7, promtest.CollectAndCount(bkt.metrics.opsDuration))
 
+	//TODO need to make sure InMemBucket supports all options...
+
 	AcceptanceTest(t, bkt.WithExpectedErrs(bkt.IsObjNotFoundErr))
 	testutil.Equals(t, float64(9), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpIter)))
 	testutil.Equals(t, float64(2), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpAttributes)))

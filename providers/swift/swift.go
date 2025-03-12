@@ -339,7 +339,7 @@ func (c *Container) IsAccessDeniedErr(err error) bool {
 
 // Upload writes the contents of the reader as an object into the container.
 func (c *Container) Upload(_ context.Context, name string, r io.Reader, options ...objstore.UploadOption) (err error) {
-	if err := objstore.ValidateWriteOptions(c.SupportedUploadOptions(), options...); err != nil {
+	if err := objstore.ValidateUploadOptions(c.SupportedUploadOptions(), options...); err != nil {
 		return err
 	}
 	size, err := objstore.TryToGetSize(r)

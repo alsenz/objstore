@@ -114,7 +114,7 @@ func (b *Bucket) Delete(_ context.Context, name string) error {
 
 // Upload the contents of the reader as an object into the bucket.
 func (b *Bucket) Upload(_ context.Context, name string, r io.Reader, options ...objstore.UploadOption) error {
-	if err := objstore.ValidateWriteOptions(b.SupportedUploadOptions(), options...); err != nil {
+	if err := objstore.ValidateUploadOptions(b.SupportedUploadOptions(), options...); err != nil {
 		return err
 	}
 

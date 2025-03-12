@@ -367,7 +367,7 @@ func (b *Bucket) Exists(ctx context.Context, name string) (bool, error) {
 // Upload the contents of the reader as an object into the bucket.
 func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.UploadOption) error {
 	//TODO: add support for azure before PR.
-	if err := objstore.ValidateWriteOptions(b.SupportedUploadOptions(), options...); err != nil {
+	if err := objstore.ValidateUploadOptions(b.SupportedUploadOptions(), options...); err != nil {
 		return err
 	}
 

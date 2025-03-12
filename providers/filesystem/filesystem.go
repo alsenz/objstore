@@ -92,7 +92,6 @@ func (b *Bucket) IterWithAttributes(ctx context.Context, dir string, f func(attr
 		name := filepath.Join(dir, file.Name())
 
 		if file.IsDir() {
-			chk
 			empty, err := isDirEmpty(filepath.Join(absDir, file.Name()))
 			if err != nil {
 				return err
@@ -279,7 +278,7 @@ func openFile(name string, ifNotExists bool) (f *os.File, exists bool, err error
 // Upload writes the file specified in src to into the memory.
 func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.UploadOption) (err error) {
 
-	if err := objstore.ValidateWriteOptions(b.SupportedUploadOptions(), options...); err != nil {
+	if err := objstore.ValidateUploadOptions(b.SupportedUploadOptions(), options...); err != nil {
 		return err
 	}
 
@@ -293,7 +292,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 		return err
 	}
 
-	params := objstore.ApplyWriteOptions(options...)
+	params := objstore.ApplyUploadOptions(options...)
 
 	// Filesystem provider for debugging & troubleshooting uses a swap file as a file lock.
 	swf, err := openSwap(file)

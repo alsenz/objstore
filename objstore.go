@@ -232,33 +232,46 @@ func applyDownloadOptions(options ...DownloadOption) downloadParams {
 	return out
 }
 
-var ErrUploadOptionNotSupported = errors.New("write option is not supported")
-var ErrUploadOptionInvalid = errors.New("write option is invalid")
+var ErrUploadOptionNotSupported = errors.New("upload option is not supported")
+var ErrUploadOptionInvalid = errors.New("upload option is invalid")
 
 type UploadOptionType int
 
 const (
-	IfNotExists UploadOptionType = iota
+	Concurrency UploadOptionType = iota
+	IfNotExists
 	IfMatch
 	IfNotMatch
 )
 
 type UploadOption struct {
 	Type  UploadOptionType
-	Apply func(params *WriteParams)
+	Apply func(params *UploadParams)
 }
 
-// WriteParams hold conditional write attribute metadata
-type WriteParams struct {
+// TODO see if we can make this private
+// UploadParams hold concurrency and conditional write attribute metadata
+type UploadParams struct {
+	Concurrency int
 	IfNotExists bool
 	IfNotMatch  bool
-	Condition   *ObjectVersion
+	Condition   *ObjectVersion //TODO make condition not supported for UploadDirectory.
+}
+
+// WithUploadConcurrency is an option to set the concurrency of the upload operation.
+func WithUploadConcurrency(concurrency int) UploadOption {
+	return UploadOption{
+		Type: Concurrency,
+		Apply: func(params *UploadParams) {
+			params.Concurrency = concurrency
+		},
+	}
 }
 
 func WithIfNotExists() UploadOption {
 	return UploadOption{
 		Type: IfNotExists,
-		Apply: func(params *WriteParams) {
+		Apply: func(params *UploadParams) {
 			params.IfNotExists = true
 		},
 	}
@@ -267,7 +280,7 @@ func WithIfNotExists() UploadOption {
 func WithIfMatch(ver *ObjectVersion) UploadOption {
 	return UploadOption{
 		Type: IfMatch,
-		Apply: func(params *WriteParams) {
+		Apply: func(params *UploadParams) {
 			params.Condition = ver
 		},
 	}
@@ -276,20 +289,20 @@ func WithIfMatch(ver *ObjectVersion) UploadOption {
 func WithIfNotMatch(ver *ObjectVersion) UploadOption {
 	return UploadOption{
 		Type: IfNotMatch,
-		Apply: func(params *WriteParams) {
+		Apply: func(params *UploadParams) {
 			params.Condition = ver
 			params.IfNotMatch = true
 		},
 	}
 }
 
-func ValidateWriteOptions(supportedOptions []UploadOptionType, options ...UploadOption) error {
+func ValidateUploadOptions(supportedOptions []UploadOptionType, options ...UploadOption) error {
 	for _, opt := range options {
 		if !slices.Contains(supportedOptions, opt.Type) {
 			return fmt.Errorf("%w: %d", ErrUploadOptionNotSupported, opt.Type)
 		}
 		if opt.Type == IfMatch || opt.Type == IfNotMatch {
-			candidate := &WriteParams{}
+			candidate := &UploadParams{}
 			opt.Apply(candidate)
 			if candidate.Condition == nil {
 				return fmt.Errorf("%w: Condition nil", ErrUploadOptionInvalid)
@@ -299,39 +312,10 @@ func ValidateWriteOptions(supportedOptions []UploadOptionType, options ...Upload
 	return nil
 }
 
-func ApplyWriteOptions(options ...UploadOption) WriteParams {
-	out := WriteParams{}
+func ApplyUploadOptions(options ...UploadOption) UploadParams {
+	out := UploadParams{}
 	for _, opt := range options {
 		opt.Apply(&out)
-	}
-	return out
-}
-
-//TODO damn I've messed up - UploadOption already has concurrency
-//TODO - I think then let's reconcile this... let's see where this is actually used...
-//TODO TODO yup, this is the way...
-
-// UploadOption configures the provided params.
-type UploadOption func(params *uploadParams)
-
-// uploadParams holds the UploadDir() parameters and is used by objstore clients implementations.
-type uploadParams struct {
-	concurrency int
-}
-
-// WithUploadConcurrency is an option to set the concurrency of the upload operation.
-func WithUploadConcurrency(concurrency int) UploadOption {
-	return func(params *uploadParams) {
-		params.concurrency = concurrency
-	}
-}
-
-func applyUploadOptions(options ...UploadOption) uploadParams {
-	out := uploadParams{
-		concurrency: 1,
-	}
-	for _, opt := range options {
-		opt(&out)
 	}
 	return out
 }
@@ -422,12 +406,15 @@ func NopCloserWithSize(r io.Reader) io.ReadCloser {
 // named dstdir. It is a caller responsibility to clean partial upload in case of failure.
 func UploadDir(ctx context.Context, logger log.Logger, bkt Bucket, srcdir, dstdir string, options ...UploadOption) error {
 	df, err := os.Stat(srcdir)
-	opts := applyUploadOptions(options...)
+	opts := ApplyUploadOptions(options...)
+	if opts.Condition != nil {
+		return fmt.Errorf("condition not supported for UploadDir: %w", ErrUploadOptionInvalid)
+	}
 
 	// The derived Context is canceled the first time a function passed to Go returns a non-nil error or the first
 	// time Wait returns, whichever occurs first.
 	g, ctx := errgroup.WithContext(ctx)
-	g.SetLimit(opts.concurrency)
+	g.SetLimit(opts.Concurrency)
 
 	if err != nil {
 		return errors.Wrap(err, "stat dir")
@@ -449,7 +436,7 @@ func UploadDir(ctx context.Context, logger log.Logger, bkt Bucket, srcdir, dstdi
 			}
 
 			dst := path.Join(dstdir, filepath.ToSlash(srcRel))
-			return UploadFile(ctx, logger, bkt, src, dst)
+			return UploadFile(ctx, logger, bkt, src, dst, options...)
 		})
 
 		return nil

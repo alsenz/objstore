@@ -113,8 +113,8 @@ func (i *InMemBucket) SupportedIterOptions() []IterOptionType {
 }
 
 // TODO probably support this a bit...
-func (i *InMemBucket) SupportedWriteOptions() []WriteOptionType {
-	return []WriteOptionType{}
+func (i *InMemBucket) SupportedUploadOptions() []UploadOptionType {
+	return []UploadOptionType{}
 }
 
 func (b *InMemBucket) IterWithAttributes(ctx context.Context, dir string, f func(attrs IterObjectAttributes) error, options ...IterOption) error {
@@ -218,7 +218,7 @@ func (b *InMemBucket) Attributes(_ context.Context, name string) (ObjectAttribut
 }
 
 // Upload writes the file specified in src to into the memory.
-func (b *InMemBucket) Upload(_ context.Context, name string, r io.Reader, _ ...WriteOption) error {
+func (b *InMemBucket) Upload(_ context.Context, name string, r io.Reader, _ ...UploadOption) error {
 	//TODO maybe add some testing support to InMemBucket?
 	b.mtx.Lock()
 	defer b.mtx.Unlock()

@@ -6,10 +6,13 @@ package filesystem
 import (
 	"context"
 	"fmt"
+	"hash/crc32" //TODO let's use this...
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 
 	"github.com/efficientgo/core/errcapture"
 	"github.com/pkg/errors"
@@ -57,6 +60,8 @@ func (b *Bucket) SupportedIterOptions() []objstore.IterOptionType {
 	return []objstore.IterOptionType{objstore.Recursive, objstore.UpdatedAt}
 }
 
+var table = crc32.MakeTable(crc32.IEEE)
+
 func (b *Bucket) IterWithAttributes(ctx context.Context, dir string, f func(attrs objstore.IterObjectAttributes) error, options ...objstore.IterOption) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -87,6 +92,7 @@ func (b *Bucket) IterWithAttributes(ctx context.Context, dir string, f func(attr
 		name := filepath.Join(dir, file.Name())
 
 		if file.IsDir() {
+			chk
 			empty, err := isDirEmpty(filepath.Join(absDir, file.Name()))
 			if err != nil {
 				return err
@@ -247,10 +253,33 @@ func (b *Bucket) Exists(ctx context.Context, name string) (bool, error) {
 	return !info.IsDir(), nil
 }
 
-// Upload writes the file specified in src to into the memory.
-func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.WriteOption) (err error) {
+func openSwap(name string) (swf *os.File, err error) {
+	for {
+		swf, err = os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
+		if err == nil {
+			return
+		} else if !errors.Is(err, fs.ErrExist) {
+			return
+		}
+	}
+}
 
-	if err := objstore.ValidateWriteOptions(b.SupportedWriteOptions(), options...); err != nil {
+func openFile(name string, ifNotExists bool) (f *os.File, exists bool, err error) {
+	// First try to open the file with exclusive create, then truncate if permitted
+	flags := os.O_RDWR | os.O_CREATE | os.O_EXCL
+	f, err = os.OpenFile(name, flags, 0666)
+	if errors.Is(err, fs.ErrExist) && !ifNotExists {
+		exists = true
+		flags = os.O_RDWR | os.O_CREATE | os.O_TRUNC
+		f, err = os.OpenFile(name, flags, 0666)
+	}
+	return
+}
+
+// Upload writes the file specified in src to into the memory.
+func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.UploadOption) (err error) {
+
+	if err := objstore.ValidateWriteOptions(b.SupportedUploadOptions(), options...); err != nil {
 		return err
 	}
 
@@ -266,49 +295,71 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 
 	params := objstore.ApplyWriteOptions(options...)
 
-	//TODO support versions somehow...
-
-	// Exclusive creation of swap file is used as protection against concurrent writes
-	//TODO: somehow loop trying to create this file effectively as an flock...
-	swf, err := os.OpenFile(swap, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
+	// Filesystem provider for debugging & troubleshooting uses a swap file as a file lock.
+	swf, err := openSwap(file)
 	if err != nil {
 		return err
 	}
-	defer errcapture.Do(&err, swf.Close, "close")
-
-	// File is opened to safely ensure IfNotExists if applicable
-	flags := os.O_RDWR | os.O_CREATE
-	if params.IfNotExists {
-		flags |= os.O_EXCL
-	} else {
-		flags |= os.O_TRUNC
+	clearSwap := func() error {
+		err := os.Remove(swap)
+		if os.IsNotExist(err) {
+			err = nil
+		}
+		return err
 	}
-	f, err := os.OpenFile(file, flags, 0666)
+	defer errcapture.Do(&err, swf.Close, "close")
+	defer errcapture.Do(&err, clearSwap, "remove swap")
+
+	f, exists, err := openFile(file, params.IfNotExists)
 	if err != nil {
-		_ = os.Remove(swap)
 		return err
 	}
 	defer errcapture.Do(&err, f.Close, "close")
 
+	//TODO pull this out!
+	if params.Condition != nil && !exists && !params.IfNotMatch {
+		//TODO this is an error condition
+		//TODO decide on errors
+	}
+	if params.Condition != nil && exists {
+		if params.Condition.Type != objstore.ETag {
+			//TODO this is an error condition, decide on errors
+		}
+		rc, err := b.Get(ctx, name)
+		if err != nil {
+			return err
+		}
+		defer errcapture.Do(&err, rc.Close, "close")
+		bytes, err := io.ReadAll(rc)
+		if err != nil {
+			return err
+		}
+		chk := crc32.Checksum(bytes, table)
+		if params.IfNotMatch && strconv.Itoa(int(chk)) == params.Condition.Value {
+			//TODO error condition
+		} else if !params.IfNotMatch && strconv.Itoa(int(chk)) != params.Condition.Value {
+			//TODO error condition
+			//TODO need to implement object version... TODO TODO
+		}
+	} //... if the file doesn't exist, and it's an IfNotMatch, that's always fine
+
 	if _, err := io.Copy(swf, r); err != nil {
-		_ = os.Remove(swap)
 		return errors.Wrapf(err, "copy to %s", swap)
 	}
 	// Move swap into target, atomic on unix for which IfNotExists is supported.
 	if err := os.Rename(swap, file); err != nil {
-		_ = os.Remove(swap)
 		return err
 	}
 
 	return nil
 }
 
-func (b *Bucket) SupportedWriteOptions() []objstore.WriteOptionType {
+func (b *Bucket) SupportedUploadOptions() []objstore.UploadOptionType {
 	if runtime.GOOS == "windows" {
 		// Moves are not guaranteed to be atomic
-		return []objstore.WriteOptionType{}
+		return []objstore.UploadOptionType{}
 	}
-	return []objstore.WriteOptionType{objstore.IfNotExists}
+	return []objstore.UploadOptionType{objstore.IfNotExists, objstore.IfMatch}
 }
 
 func isDirEmpty(name string) (ok bool, err error) {

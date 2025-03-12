@@ -69,8 +69,8 @@ func (p *PrefixedBucket) SupportedIterOptions() []IterOptionType {
 	return p.bkt.SupportedIterOptions()
 }
 
-func (p *PrefixedBucket) SupportedWriteOptions() []WriteOptionType {
-	return p.bkt.SupportedWriteOptions()
+func (p *PrefixedBucket) SupportedUploadOptions() []UploadOptionType {
+	return p.bkt.SupportedUploadOptions()
 }
 
 // Get returns a reader for the given object name.
@@ -105,7 +105,7 @@ func (p *PrefixedBucket) Attributes(ctx context.Context, name string) (ObjectAtt
 
 // Upload the contents of the reader as an object into the bucket.
 // Upload should be idempotent.
-func (p *PrefixedBucket) Upload(ctx context.Context, name string, r io.Reader, options ...WriteOption) error {
+func (p *PrefixedBucket) Upload(ctx context.Context, name string, r io.Reader, options ...UploadOption) error {
 	return p.bkt.Upload(ctx, conditionalPrefix(p.prefix, name), r, options...)
 }
 

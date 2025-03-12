@@ -365,9 +365,9 @@ func (b *Bucket) Exists(ctx context.Context, name string) (bool, error) {
 }
 
 // Upload the contents of the reader as an object into the bucket.
-func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.WriteOption) error {
+func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.UploadOption) error {
 	//TODO: add support for azure before PR.
-	if err := objstore.ValidateWriteOptions(b.SupportedWriteOptions(), options...); err != nil {
+	if err := objstore.ValidateWriteOptions(b.SupportedUploadOptions(), options...); err != nil {
 		return err
 	}
 
@@ -383,8 +383,8 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 	return nil
 }
 
-func (b *Bucket) SupportedWriteOptions() []objstore.WriteOptionType {
-	return []objstore.WriteOptionType{}
+func (b *Bucket) SupportedUploadOptions() []objstore.UploadOptionType {
+	return []objstore.UploadOptionType{}
 }
 
 // Delete removes the object with the given name.

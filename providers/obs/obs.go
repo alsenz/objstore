@@ -137,8 +137,8 @@ func (b *Bucket) Delete(ctx context.Context, name string) error {
 }
 
 // Upload the contents of the reader as an object into the bucket.
-func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.WriteOption) error {
-	if err := objstore.ValidateWriteOptions(b.SupportedWriteOptions(), options...); err != nil {
+func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.UploadOption) error {
+	if err := objstore.ValidateWriteOptions(b.SupportedUploadOptions(), options...); err != nil {
 		return err
 	}
 	size, err := objstore.TryToGetSize(r)
@@ -193,8 +193,8 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 	return nil
 }
 
-func (b *Bucket) SupportedWriteOptions() []objstore.WriteOptionType {
-	return []objstore.WriteOptionType{}
+func (b *Bucket) SupportedUploadOptions() []objstore.UploadOptionType {
+	return []objstore.UploadOptionType{}
 }
 
 func (b *Bucket) putObjectSingle(key string, body io.Reader) error {

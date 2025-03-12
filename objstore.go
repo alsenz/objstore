@@ -62,16 +62,10 @@ type Bucket interface {
 
 	// Upload the contents of the reader as an object into the bucket.
 	// Upload should be idempotent.
-	Upload(ctx context.Context, name string, r io.Reader, options ...WriteOption) error
-
-	//TODO I have a feeling that this is going to be a bit much to have two kinds of write Condition
-	//TODO so instead, let's just have a single WriteOptions business...
-	//TODO or we do flags... IfNotMatch, IfMatch, IfNotExists
-	//TODO then maybe object version is just part of conditions.... yup, that's the way...
-	//TODO TODO ok let's do it.
+	Upload(ctx context.Context, name string, r io.Reader, options ...UploadOption) error
 
 	// SupporterWriteOptions returns a list of supported WriteOptions by the underlying provider.
-	SupportedWriteOptions() []WriteOptionType
+	SupportedUploadOptions() []UploadOptionType
 
 	// Delete removes the object with the given name.
 	// If object does not exist in the moment of deletion, Delete should throw error.
@@ -238,19 +232,19 @@ func applyDownloadOptions(options ...DownloadOption) downloadParams {
 	return out
 }
 
-var ErrWriteOptionNotSupported = errors.New("write option is not supported")
-var ErrWriteOptionInvalid = errors.New("write option is invalid")
+var ErrUploadOptionNotSupported = errors.New("write option is not supported")
+var ErrUploadOptionInvalid = errors.New("write option is invalid")
 
-type WriteOptionType int
+type UploadOptionType int
 
 const (
-	IfNotExists WriteOptionType = iota
+	IfNotExists UploadOptionType = iota
 	IfMatch
 	IfNotMatch
 )
 
-type WriteOption struct {
-	Type  WriteOptionType
+type UploadOption struct {
+	Type  UploadOptionType
 	Apply func(params *WriteParams)
 }
 
@@ -261,8 +255,8 @@ type WriteParams struct {
 	Condition   *ObjectVersion
 }
 
-func WithIfNotExists() WriteOption {
-	return WriteOption{
+func WithIfNotExists() UploadOption {
+	return UploadOption{
 		Type: IfNotExists,
 		Apply: func(params *WriteParams) {
 			params.IfNotExists = true
@@ -270,8 +264,8 @@ func WithIfNotExists() WriteOption {
 	}
 }
 
-func WithIfMatch(ver *ObjectVersion) WriteOption {
-	return WriteOption{
+func WithIfMatch(ver *ObjectVersion) UploadOption {
+	return UploadOption{
 		Type: IfMatch,
 		Apply: func(params *WriteParams) {
 			params.Condition = ver
@@ -279,8 +273,8 @@ func WithIfMatch(ver *ObjectVersion) WriteOption {
 	}
 }
 
-func WithIfNotMatch(ver *ObjectVersion) WriteOption {
-	return WriteOption{
+func WithIfNotMatch(ver *ObjectVersion) UploadOption {
+	return UploadOption{
 		Type: IfNotMatch,
 		Apply: func(params *WriteParams) {
 			params.Condition = ver
@@ -289,29 +283,33 @@ func WithIfNotMatch(ver *ObjectVersion) WriteOption {
 	}
 }
 
-func ValidateWriteOptions(supportedOptions []WriteOptionType, options ...WriteOption) error {
+func ValidateWriteOptions(supportedOptions []UploadOptionType, options ...UploadOption) error {
 	for _, opt := range options {
 		if !slices.Contains(supportedOptions, opt.Type) {
-			return fmt.Errorf("%w: %d", ErrWriteOptionNotSupported, opt.Type)
+			return fmt.Errorf("%w: %d", ErrUploadOptionNotSupported, opt.Type)
 		}
 		if opt.Type == IfMatch || opt.Type == IfNotMatch {
 			candidate := &WriteParams{}
 			opt.Apply(candidate)
 			if candidate.Condition == nil {
-				return fmt.Errorf("%w: Condition nil", ErrWriteOptionInvalid)
+				return fmt.Errorf("%w: Condition nil", ErrUploadOptionInvalid)
 			}
 		}
 	}
 	return nil
 }
 
-func ApplyWriteOptions(options ...WriteOption) WriteParams {
+func ApplyWriteOptions(options ...UploadOption) WriteParams {
 	out := WriteParams{}
 	for _, opt := range options {
 		opt.Apply(&out)
 	}
 	return out
 }
+
+//TODO damn I've messed up - UploadOption already has concurrency
+//TODO - I think then let's reconcile this... let's see where this is actually used...
+//TODO TODO yup, this is the way...
 
 // UploadOption configures the provided params.
 type UploadOption func(params *uploadParams)
@@ -466,7 +464,7 @@ func UploadDir(ctx context.Context, logger log.Logger, bkt Bucket, srcdir, dstdi
 
 // UploadFile uploads the file with the given name to the bucket.
 // It is a caller responsibility to clean partial upload in case of failure.
-func UploadFile(ctx context.Context, logger log.Logger, bkt Bucket, src, dst string, options ...WriteOption) error {
+func UploadFile(ctx context.Context, logger log.Logger, bkt Bucket, src, dst string, options ...UploadOption) error {
 	r, err := os.Open(filepath.Clean(src))
 	if err != nil {
 		return errors.Wrapf(err, "open file %s", src)
@@ -760,8 +758,8 @@ func (b *metricBucket) SupportedIterOptions() []IterOptionType {
 	return b.bkt.SupportedIterOptions()
 }
 
-func (b *metricBucket) SupportedWriteOptions() []WriteOptionType {
-	return b.bkt.SupportedWriteOptions()
+func (b *metricBucket) SupportedUploadOptions() []UploadOptionType {
+	return b.bkt.SupportedUploadOptions()
 }
 
 func (b *metricBucket) Attributes(ctx context.Context, name string) (ObjectAttributes, error) {
@@ -850,7 +848,7 @@ func (b *metricBucket) Exists(ctx context.Context, name string) (bool, error) {
 	return ok, nil
 }
 
-func (b *metricBucket) Upload(ctx context.Context, name string, r io.Reader, options ...WriteOption) error {
+func (b *metricBucket) Upload(ctx context.Context, name string, r io.Reader, options ...UploadOption) error {
 	const op = OpUpload
 	b.metrics.ops.WithLabelValues(op).Inc()
 

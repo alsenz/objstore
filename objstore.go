@@ -122,6 +122,9 @@ type BucketReader interface {
 	// IsAccessDeniedErr returns true if access to object is denied.
 	IsAccessDeniedErr(err error) bool
 
+	// IsConditionNotMet returns true if an UploadOption condition parameter (IfNotExists, IfMatch, IfNotMatch) was not met
+	IsConditionNotMetErr(err error) bool
+
 	// Attributes returns information about the specified object.
 	Attributes(ctx context.Context, name string) (ObjectAttributes, error)
 }
@@ -888,6 +891,8 @@ func (b *metricBucket) IsObjNotFoundErr(err error) bool {
 func (b *metricBucket) IsAccessDeniedErr(err error) bool {
 	return b.bkt.IsAccessDeniedErr(err)
 }
+
+func (b *metricBucket) IsConditionNotMetErr(err error) bool { return b.bkt.IsConditionNotMetErr(err) }
 
 func (b *metricBucket) Close() error {
 	return b.bkt.Close()

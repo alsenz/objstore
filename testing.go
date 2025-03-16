@@ -416,3 +416,7 @@ func (d *delayingBucket) IsObjNotFoundErr(err error) bool {
 func (d *delayingBucket) IsAccessDeniedErr(err error) bool {
 	return d.bkt.IsAccessDeniedErr(err)
 }
+
+func (d *delayingBucket) IsConditionNotMetErr(err error) bool {
+	return d.bkt.IsConditionNotMetErr(err)
+}

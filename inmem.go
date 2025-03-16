@@ -17,6 +17,8 @@ import (
 
 var errNotFound = errors.New("inmem: object not found")
 
+var errConditionNotMet = errors.New("inmem: condition not met")
+
 // InMemBucket implements the objstore.Bucket interfaces against local memory.
 // Methods from Bucket interface are thread-safe. Objects are assumed to be immutable.
 type InMemBucket struct {
@@ -255,6 +257,9 @@ func (b *InMemBucket) IsObjNotFoundErr(err error) bool {
 func (b *InMemBucket) IsAccessDeniedErr(err error) bool {
 	return false
 }
+
+// TODO - actually use this err
+func (b *InMemBucket) IsConditionNotMetErr(err error) bool { return errors.Is(err, errConditionNotMet) }
 
 func (b *InMemBucket) Close() error { return nil }
 

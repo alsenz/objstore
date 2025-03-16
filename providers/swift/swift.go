@@ -337,6 +337,8 @@ func (c *Container) IsAccessDeniedErr(err error) bool {
 	return errors.Is(err, swift.Forbidden)
 }
 
+func (c *Container) IsConditionNotMetErr(_ error) bool { return false }
+
 // Upload writes the contents of the reader as an object into the container.
 func (c *Container) Upload(_ context.Context, name string, r io.Reader, options ...objstore.UploadOption) (err error) {
 	if err := objstore.ValidateUploadOptions(c.SupportedUploadOptions(), options...); err != nil {

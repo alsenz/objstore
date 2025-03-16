@@ -271,6 +271,8 @@ func (b *Bucket) IsAccessDeniedErr(err error) bool {
 	return false
 }
 
+func (b *Bucket) IsConditionNotMetErr(_ error) bool { return false }
+
 // ObjectSize returns the size of the specified object.
 func (b *Bucket) ObjectSize(ctx context.Context, name string) (uint64, error) {
 	response, err := getObject(ctx, *b, name, "")

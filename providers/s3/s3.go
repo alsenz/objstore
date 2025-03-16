@@ -624,6 +624,9 @@ func (b *Bucket) IsAccessDeniedErr(err error) bool {
 	return minio.ToErrorResponse(errors.Cause(err)).Code == "AccessDenied"
 }
 
+// TODO implement
+func (b *Bucket) IsConditionNotMetErr(err error) bool { return false }
+
 func (b *Bucket) Close() error { return nil }
 
 // getServerSideEncryption returns the SSE to use.

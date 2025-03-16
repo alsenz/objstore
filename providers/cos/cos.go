@@ -401,6 +401,8 @@ func (b *Bucket) IsAccessDeniedErr(_ error) bool {
 	return false
 }
 
+func (b *Bucket) IsConditionNotMetErr(_ error) bool { return false }
+
 func (b *Bucket) Close() error { return nil }
 
 type objectInfo struct {

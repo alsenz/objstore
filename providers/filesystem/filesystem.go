@@ -411,6 +411,9 @@ func (b *Bucket) IsAccessDeniedErr(_ error) bool {
 	return false
 }
 
+// TODO implement
+func (b *Bucket) IsConditionNotMetErr(err error) bool { return false }
+
 func (b *Bucket) Close() error { return nil }
 
 // Name returns the bucket name.

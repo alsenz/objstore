@@ -433,3 +433,7 @@ func (b *Bucket) IsAccessDeniedErr(err error) bool {
 	}
 	return false
 }
+
+func (b *Bucket) IsConditionNotMetErr(_ error) bool {
+	return false
+}

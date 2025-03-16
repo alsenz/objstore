@@ -339,6 +339,8 @@ func (b *Bucket) IsAccessDeniedErr(_ error) bool {
 	return false
 }
 
+func (b *Bucket) IsConditionNotMetErr(_ error) bool { return false }
+
 func (b *Bucket) getRange(_ context.Context, bucketName, objectKey string, off, length int64) (io.ReadCloser, error) {
 	if len(objectKey) == 0 {
 		return nil, errors.Errorf("given object name should not empty")

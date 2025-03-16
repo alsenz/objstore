@@ -367,6 +367,8 @@ func (b *Bucket) IsAccessDeniedErr(_ error) bool {
 	return false
 }
 
+func (b *Bucket) IsConditionNotMetErr(_ error) bool { return false }
+
 // Attributes returns information about the specified object.
 func (b *Bucket) Attributes(ctx context.Context, name string) (objstore.ObjectAttributes, error) {
 	output, err := b.client.GetObjectMetadata(&obs.GetObjectMetadataInput{

@@ -156,6 +156,10 @@ func (t TracingBucket) IsAccessDeniedErr(err error) bool {
 	return t.bkt.IsAccessDeniedErr(err)
 }
 
+func (t TracingBucket) IsConditionNotMetErr(err error) bool {
+	return t.bkt.IsConditionNotMetErr(err)
+}
+
 func (t TracingBucket) WithExpectedErrs(expectedFunc objstore.IsOpFailureExpectedFunc) objstore.Bucket {
 	if ib, ok := t.bkt.(objstore.InstrumentedBucket); ok {
 		return TracingBucket{tracer: t.tracer, bkt: ib.WithExpectedErrs(expectedFunc)}

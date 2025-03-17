@@ -6,8 +6,11 @@ package objstore
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"hash/crc32"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +29,8 @@ type InMemBucket struct {
 	objects map[string][]byte
 	attrs   map[string]ObjectAttributes
 }
+
+var table = crc32.MakeTable(crc32.IEEE)
 
 // NewInMemBucket returns a new in memory Bucket.
 // NOTE: Returned bucket is just a naive in memory bucket implementation. For test use cases only.
@@ -114,9 +119,8 @@ func (i *InMemBucket) SupportedIterOptions() []IterOptionType {
 	return []IterOptionType{Recursive}
 }
 
-// TODO probably support this a bit...
 func (i *InMemBucket) SupportedUploadOptions() []UploadOptionType {
-	return []UploadOptionType{}
+	return []UploadOptionType{IfNotExists, IfMatch, IfNotMatch}
 }
 
 func (b *InMemBucket) IterWithAttributes(ctx context.Context, dir string, f func(attrs IterObjectAttributes) error, options ...IterOption) error {
@@ -220,8 +224,7 @@ func (b *InMemBucket) Attributes(_ context.Context, name string) (ObjectAttribut
 }
 
 // Upload writes the file specified in src to into the memory.
-func (b *InMemBucket) Upload(_ context.Context, name string, r io.Reader, _ ...UploadOption) error {
-	//TODO maybe add some testing support to InMemBucket?
+func (b *InMemBucket) Upload(_ context.Context, name string, r io.Reader, options ...UploadOption) error {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 	body, err := io.ReadAll(r)
@@ -229,9 +232,35 @@ func (b *InMemBucket) Upload(_ context.Context, name string, r io.Reader, _ ...U
 		return err
 	}
 	b.objects[name] = body
+
+	params := ApplyUploadOptions(options...)
+	generation := 0
+	if prev, ok := b.attrs[name]; ok {
+		if prev.Version == nil || prev.Version.Type != Generation {
+			return fmt.Errorf("inmem object should always have a generational version")
+		}
+		if params.IfNotExists {
+			return errConditionNotMet
+		}
+		if generation, err = strconv.Atoi(prev.Version.Value); err != nil {
+			return err
+		}
+		if params.Condition != nil {
+			if params.Condition.Value != prev.Version.Value && !params.IfNotMatch {
+				return errConditionNotMet
+			} else if params.Condition.Value == prev.Version.Value && params.IfNotMatch {
+				return errConditionNotMet
+			}
+		}
+	} else if params.Condition != nil && !params.IfNotMatch {
+		return errConditionNotMet
+	}
+	generation++
+
 	b.attrs[name] = ObjectAttributes{
 		Size:         int64(len(body)),
 		LastModified: time.Now(),
+		Version:      &ObjectVersion{Type: Generation, Value: strconv.Itoa(generation)},
 	}
 	return nil
 }
@@ -258,7 +287,6 @@ func (b *InMemBucket) IsAccessDeniedErr(err error) bool {
 	return false
 }
 
-// TODO - actually use this err
 func (b *InMemBucket) IsConditionNotMetErr(err error) bool { return errors.Is(err, errConditionNotMet) }
 
 func (b *InMemBucket) Close() error { return nil }

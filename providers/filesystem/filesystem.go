@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 
 	"github.com/efficientgo/core/errcapture"
@@ -20,6 +21,8 @@ import (
 
 	"github.com/thanos-io/objstore"
 )
+
+var errConditionNotMet = errors.New("filesystem: upload condition not met")
 
 // Config stores the configuration for storing and accessing blobs in filesystem.
 type Config struct {
@@ -32,6 +35,8 @@ type Config struct {
 type Bucket struct {
 	rootDir string
 }
+
+var table = crc32.MakeTable(crc32.IEEE)
 
 // NewBucketFromConfig returns a new filesystem.Bucket from config.
 func NewBucketFromConfig(conf []byte) (*Bucket, error) {
@@ -59,8 +64,6 @@ func (b *Bucket) Provider() objstore.ObjProvider { return objstore.FILESYSTEM }
 func (b *Bucket) SupportedIterOptions() []objstore.IterOptionType {
 	return []objstore.IterOptionType{objstore.Recursive, objstore.UpdatedAt}
 }
-
-var table = crc32.MakeTable(crc32.IEEE)
 
 func (b *Bucket) IterWithAttributes(ctx context.Context, dir string, f func(attrs objstore.IterObjectAttributes) error, options ...objstore.IterOption) error {
 	if ctx.Err() != nil {
@@ -177,9 +180,36 @@ func (b *Bucket) Attributes(ctx context.Context, name string) (objstore.ObjectAt
 		return objstore.ObjectAttributes{}, errors.Wrapf(err, "stat %s", file)
 	}
 
+	if !slices.Contains(b.SupportedUploadOptions(), objstore.IfMatch) && !slices.Contains(b.SupportedUploadOptions(), objstore.IfNotMatch) {
+		return objstore.ObjectAttributes{
+			Size:         stat.Size(),
+			LastModified: stat.ModTime(),
+		}, nil
+	}
+
+	//TODO redo this to be an xattr based implementation where the checksum gets written on write.
+	//TODO just have this temporarily like this for now.
+
+	//TODO only return version if supported...
+
+	rc, err := b.Get(ctx, name)
+	if err != nil {
+		return objstore.ObjectAttributes{}, err
+	}
+	defer errcapture.Do(&err, rc.Close, "close")
+	bytes, err := io.ReadAll(rc)
+	if err != nil {
+		return objstore.ObjectAttributes{}, err
+	}
+	chksum := crc32.Checksum(bytes, table)
+
 	return objstore.ObjectAttributes{
 		Size:         stat.Size(),
 		LastModified: stat.ModTime(),
+		Version: &objstore.ObjectVersion{
+			Type:  objstore.ETag,
+			Value: strconv.Itoa(int(chksum)), //TODO why isn't this an error?
+		},
 	}, nil
 }
 
@@ -295,7 +325,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 	params := objstore.ApplyUploadOptions(options...)
 
 	// Filesystem provider for debugging & troubleshooting uses a swap file as a file lock.
-	swf, err := openSwap(file)
+	swf, err := openSwap(swap)
 	if err != nil {
 		return err
 	}
@@ -315,14 +345,31 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 	}
 	defer errcapture.Do(&err, f.Close, "close")
 
-	//TODO pull this out!
+	if err := b.checkConditions(ctx, name, params, exists); err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(swf, r); err != nil {
+		return errors.Wrapf(err, "copy to %s", swap)
+	}
+	if err := swf.Sync(); err != nil {
+		return err
+	}
+	// Move swap into target, atomic on unix for which IfNotExists is supported.
+	if err := os.Rename(swap, file); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (b *Bucket) checkConditions(ctx context.Context, name string, params objstore.UploadParams, exists bool) error {
 	if params.Condition != nil && !exists && !params.IfNotMatch {
-		//TODO this is an error condition
-		//TODO decide on errors
+		return errConditionNotMet
 	}
 	if params.Condition != nil && exists {
 		if params.Condition.Type != objstore.ETag {
-			//TODO this is an error condition, decide on errors
+			return errConditionNotMet
 		}
 		rc, err := b.Get(ctx, name)
 		if err != nil {
@@ -333,23 +380,16 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 		if err != nil {
 			return err
 		}
-		chk := crc32.Checksum(bytes, table)
-		if params.IfNotMatch && strconv.Itoa(int(chk)) == params.Condition.Value {
-			//TODO error condition
-		} else if !params.IfNotMatch && strconv.Itoa(int(chk)) != params.Condition.Value {
-			//TODO error condition
-			//TODO need to implement object version... TODO TODO
+		chksum := crc32.Checksum(bytes, table)
+		//fmt.Printf("go to here?")
+		fmt.Fprintln(os.Stderr, "got to here?")
+		if params.IfNotMatch && strconv.Itoa(int(chksum)) == params.Condition.Value {
+			return errConditionNotMet
+		} else if !params.IfNotMatch && strconv.Itoa(int(chksum)) != params.Condition.Value {
+			return errConditionNotMet
 		}
-	} //... if the file doesn't exist, and it's an IfNotMatch, that's always fine
-
-	if _, err := io.Copy(swf, r); err != nil {
-		return errors.Wrapf(err, "copy to %s", swap)
 	}
-	// Move swap into target, atomic on unix for which IfNotExists is supported.
-	if err := os.Rename(swap, file); err != nil {
-		return err
-	}
-
+	//... if the file doesn't exist, and it's an IfNotMatch, that's always fine
 	return nil
 }
 
@@ -358,7 +398,7 @@ func (b *Bucket) SupportedUploadOptions() []objstore.UploadOptionType {
 		// Moves are not guaranteed to be atomic
 		return []objstore.UploadOptionType{}
 	}
-	return []objstore.UploadOptionType{objstore.IfNotExists, objstore.IfMatch}
+	return []objstore.UploadOptionType{objstore.IfNotExists, objstore.IfMatch, objstore.IfNotMatch}
 }
 
 func isDirEmpty(name string) (ok bool, err error) {
@@ -411,8 +451,8 @@ func (b *Bucket) IsAccessDeniedErr(_ error) bool {
 	return false
 }
 
-// TODO implement
-func (b *Bucket) IsConditionNotMetErr(err error) bool { return false }
+// TODO add acceptance test checks for this.
+func (b *Bucket) IsConditionNotMetErr(err error) bool { return errors.Is(err, errConditionNotMet) }
 
 func (b *Bucket) Close() error { return nil }
 

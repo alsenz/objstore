@@ -337,8 +337,8 @@ type ObjectAttributes struct {
 type ObjectVersionType int
 
 const (
-	Version ObjectVersionType = iota
-	ETag    ObjectVersionType = iota
+	Generation ObjectVersionType = iota
+	ETag       ObjectVersionType = iota
 )
 
 type ObjectVersion struct {

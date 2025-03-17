@@ -227,14 +227,10 @@ func (b *InMemBucket) Attributes(_ context.Context, name string) (ObjectAttribut
 func (b *InMemBucket) Upload(_ context.Context, name string, r io.Reader, options ...UploadOption) error {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
-	body, err := io.ReadAll(r)
-	if err != nil {
-		return err
-	}
-	b.objects[name] = body
 
 	params := ApplyUploadOptions(options...)
 	generation := 0
+
 	if prev, ok := b.attrs[name]; ok {
 		if prev.Version == nil || prev.Version.Type != Generation {
 			return fmt.Errorf("inmem object should always have a generational version")
@@ -242,6 +238,7 @@ func (b *InMemBucket) Upload(_ context.Context, name string, r io.Reader, option
 		if params.IfNotExists {
 			return errConditionNotMet
 		}
+		var err error
 		if generation, err = strconv.Atoi(prev.Version.Value); err != nil {
 			return err
 		}
@@ -257,6 +254,12 @@ func (b *InMemBucket) Upload(_ context.Context, name string, r io.Reader, option
 	}
 	generation++
 
+	body, err := io.ReadAll(r)
+	if err != nil {
+		return err
+	}
+
+	b.objects[name] = body
 	b.attrs[name] = ObjectAttributes{
 		Size:         int64(len(body)),
 		LastModified: time.Now(),

@@ -275,7 +275,6 @@ func AcceptanceTest(t *testing.T, bkt Bucket) {
 	if slices.Contains(bkt.SupportedUploadOptions(), IfNotExists) {
 		testutil.Ok(t, bkt.Upload(ctx, "obj_7.some", strings.NewReader("@test-data7@"), WithIfNotExists()))
 		// Can't and won't write if object exists
-		//TODO this line is broken
 		testutil.NotOk(t, bkt.Upload(ctx, "obj_7.some", strings.NewReader("@test-data7.2@"), WithIfNotExists()))
 		rc7, err := bkt.Get(ctx, "obj_7.some")
 		testutil.Ok(t, err)

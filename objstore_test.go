@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -29,10 +30,20 @@ func TestMetricBucket_Close(t *testing.T) {
 	testutil.Equals(t, 7, promtest.CollectAndCount(bkt.metrics.opsDuration))
 
 	//TODO need to make sure InMemBucket supports all options...
+	//TODO I think this should return a stats object
 
 	AcceptanceTest(t, bkt.WithExpectedErrs(bkt.IsObjNotFoundErr))
 	testutil.Equals(t, float64(9), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpIter)))
-	testutil.Equals(t, float64(2), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpAttributes)))
+	attrsCalls := 2
+	// Both conditions acceptance tests make an extra Attrs call
+	if slices.Contains(bkt.SupportedUploadOptions(), IfMatch) {
+		attrsCalls++
+	}
+	if slices.Contains(bkt.SupportedUploadOptions(), IfNotMatch) {
+		attrsCalls++
+	}
+	//TODO there's gotta be a less painful way to do this acceptance test... hmm...
+	testutil.Equals(t, float64(attrsCalls), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpAttributes)))
 	testutil.Equals(t, float64(3), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpGet)))
 	testutil.Equals(t, float64(3), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpGetRange)))
 	testutil.Equals(t, float64(2), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpExists)))

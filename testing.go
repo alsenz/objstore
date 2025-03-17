@@ -81,6 +81,7 @@ func (b noopInstrumentedBucket) ReaderWithExpectedErrs(IsOpFailureExpectedFunc) 
 	return b
 }
 
+// TODO return stats...
 func AcceptanceTest(t *testing.T, bkt Bucket) {
 	ctx := context.Background()
 
@@ -327,8 +328,8 @@ func AcceptanceTest(t *testing.T, bkt Bucket) {
 		// Update the object
 		testutil.Ok(t, bkt.Upload(ctx, "obj_9.some", strings.NewReader("@test-data9.3@")))
 		// Update it again now the different version is different
-		testutil.NotOk(t, bkt.Upload(ctx, "obj_9.some", strings.NewReader("@test-data9.4@"), WithIfNotMatch(firstAttrs.Version)))
-		rc9, err := bkt.Get(ctx, "obj_8.some")
+		testutil.Ok(t, bkt.Upload(ctx, "obj_9.some", strings.NewReader("@test-data9.4@"), WithIfNotMatch(firstAttrs.Version)))
+		rc9, err := bkt.Get(ctx, "obj_9.some")
 		testutil.Ok(t, err)
 		content, err = io.ReadAll(rc9)
 		testutil.Ok(t, err)
@@ -337,6 +338,12 @@ func AcceptanceTest(t *testing.T, bkt Bucket) {
 		testutil.Ok(t, bkt.Delete(ctx, "obj_9.some"))
 	}
 
+}
+
+type AcceptanceStats struct {
+	GetAttributesCount int
+	GetCount           int
+	UploadCount        int
 }
 
 type delayingBucket struct {

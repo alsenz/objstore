@@ -81,8 +81,7 @@ func (b noopInstrumentedBucket) ReaderWithExpectedErrs(IsOpFailureExpectedFunc) 
 	return b
 }
 
-// TODO return stats...
-func AcceptanceTest(t *testing.T, bkt Bucket) {
+func AcceptanceTest(t *testing.T, bkt Bucket) AcceptanceStats {
 	ctx := context.Background()
 
 	_, err := bkt.Get(ctx, "")
@@ -272,11 +271,22 @@ func AcceptanceTest(t *testing.T, bkt Bucket) {
 	testutil.Ok(t, bkt.Upload(ctx, "obj_6.som", bytes.NewReader(make([]byte, 1024*1024*200))))
 	testutil.Ok(t, bkt.Delete(ctx, "obj_6.som"))
 
+	stats := AcceptanceStats{
+		AttributesCount:   2,
+		GetCount:          3,
+		UploadCount:       9,
+		DeleteCount:       3,
+		FailedUploadCount: 0,
+	}
+
 	// If supported, test IfNotExists write option
 	if slices.Contains(bkt.SupportedUploadOptions(), IfNotExists) {
 		testutil.Ok(t, bkt.Upload(ctx, "obj_7.some", strings.NewReader("@test-data7@"), WithIfNotExists()))
 		// Can't and won't write if object exists
-		testutil.NotOk(t, bkt.Upload(ctx, "obj_7.some", strings.NewReader("@test-data7.2@"), WithIfNotExists()))
+		err = bkt.Upload(ctx, "obj_7.some", strings.NewReader("@test-data7.2@"), WithIfNotExists())
+		testutil.NotOk(t, err)
+		fmt.Printf("Err is: %s\n", err)
+		testutil.Assert(t, bkt.IsConditionNotMetErr(err))
 		rc7, err := bkt.Get(ctx, "obj_7.some")
 		testutil.Ok(t, err)
 		content, err = io.ReadAll(rc7)
@@ -292,6 +302,10 @@ func AcceptanceTest(t *testing.T, bkt Bucket) {
 		testutil.Equals(t, "@test-data7.3@", string(content))
 		// Delete
 		testutil.Ok(t, bkt.Delete(ctx, "obj_7.some"))
+		stats.GetCount += 2
+		stats.UploadCount += 3
+		stats.DeleteCount += 1
+		stats.FailedUploadCount += 1
 	}
 
 	// If supported, test IfMatch write option
@@ -299,7 +313,9 @@ func AcceptanceTest(t *testing.T, bkt Bucket) {
 		testutil.Ok(t, bkt.Upload(ctx, "obj_8.some", strings.NewReader("@test-data8@")))
 		// Can't and won't write if version doesn't match dummy version
 		nullVer := &ObjectVersion{ETag, "dummy"}
-		testutil.NotOk(t, bkt.Upload(ctx, "obj_8.some", strings.NewReader("@test-data8.2@"), WithIfMatch(nullVer)))
+		err = bkt.Upload(ctx, "obj_8.some", strings.NewReader("@test-data8.2@"), WithIfMatch(nullVer))
+		testutil.NotOk(t, err)
+		testutil.Assert(t, bkt.IsConditionNotMetErr(err))
 		rc8, err := bkt.Get(ctx, "obj_8.some")
 		testutil.Ok(t, err)
 		content, err = io.ReadAll(rc8)
@@ -316,6 +332,11 @@ func AcceptanceTest(t *testing.T, bkt Bucket) {
 		testutil.Equals(t, "@test-data8.3@", string(content))
 		// Delete
 		testutil.Ok(t, bkt.Delete(ctx, "obj_8.some"))
+		stats.GetCount += 2
+		stats.UploadCount += 3
+		stats.AttributesCount += 1
+		stats.DeleteCount += 1
+		stats.FailedUploadCount += 1
 	}
 
 	// If supported, test IfNotMatch write option
@@ -324,7 +345,9 @@ func AcceptanceTest(t *testing.T, bkt Bucket) {
 		firstAttrs, err := bkt.Attributes(ctx, "obj_9.some")
 		testutil.Ok(t, err)
 		// Can't write if the object versions match
-		testutil.NotOk(t, bkt.Upload(ctx, "obj_9.some", strings.NewReader("@test-data9.2@"), WithIfNotMatch(firstAttrs.Version)))
+		err = bkt.Upload(ctx, "obj_9.some", strings.NewReader("@test-data9.2@"), WithIfNotMatch(firstAttrs.Version))
+		testutil.NotOk(t, err)
+		testutil.Assert(t, bkt.IsConditionNotMetErr(err))
 		// Update the object
 		testutil.Ok(t, bkt.Upload(ctx, "obj_9.some", strings.NewReader("@test-data9.3@")))
 		// Update it again now the different version is different
@@ -336,14 +359,23 @@ func AcceptanceTest(t *testing.T, bkt Bucket) {
 		testutil.Equals(t, "@test-data9.4@", string(content))
 		// Delete
 		testutil.Ok(t, bkt.Delete(ctx, "obj_9.some"))
+		stats.GetCount += 1
+		stats.UploadCount += 4
+		stats.AttributesCount += 1
+		stats.DeleteCount += 1
+		stats.FailedUploadCount += 1
 	}
+
+	return stats
 
 }
 
 type AcceptanceStats struct {
-	GetAttributesCount int
-	GetCount           int
-	UploadCount        int
+	AttributesCount   int
+	GetCount          int
+	UploadCount       int
+	DeleteCount       int
+	FailedUploadCount int
 }
 
 type delayingBucket struct {

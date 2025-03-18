@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -32,30 +31,23 @@ func TestMetricBucket_Close(t *testing.T) {
 	//TODO need to make sure InMemBucket supports all options...
 	//TODO I think this should return a stats object
 
-	AcceptanceTest(t, bkt.WithExpectedErrs(bkt.IsObjNotFoundErr))
+	//TODO this isn't quite right since it logs opsFailure as well...
+
+	stats := AcceptanceTest(t, bkt.WithExpectedErrs(bkt.IsObjNotFoundErr))
 	testutil.Equals(t, float64(9), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpIter)))
-	attrsCalls := 2
-	// Both conditions acceptance tests make an extra Attrs call
-	if slices.Contains(bkt.SupportedUploadOptions(), IfMatch) {
-		attrsCalls++
-	}
-	if slices.Contains(bkt.SupportedUploadOptions(), IfNotMatch) {
-		attrsCalls++
-	}
-	//TODO there's gotta be a less painful way to do this acceptance test... hmm...
-	testutil.Equals(t, float64(attrsCalls), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpAttributes)))
-	testutil.Equals(t, float64(3), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpGet)))
+	testutil.Equals(t, float64(stats.AttributesCount), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpAttributes)))
+	testutil.Equals(t, float64(stats.GetCount), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpGet)))
 	testutil.Equals(t, float64(3), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpGetRange)))
 	testutil.Equals(t, float64(2), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpExists)))
-	testutil.Equals(t, float64(9), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpUpload)))
-	testutil.Equals(t, float64(3), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpDelete)))
+	testutil.Equals(t, float64(stats.UploadCount), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpUpload)))
+	testutil.Equals(t, float64(stats.DeleteCount), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpDelete)))
 	testutil.Equals(t, 7, promtest.CollectAndCount(bkt.metrics.ops))
 	testutil.Equals(t, float64(0), promtest.ToFloat64(bkt.metrics.opsFailures.WithLabelValues(OpIter)))
 	testutil.Equals(t, float64(0), promtest.ToFloat64(bkt.metrics.opsFailures.WithLabelValues(OpAttributes)))
 	testutil.Equals(t, float64(1), promtest.ToFloat64(bkt.metrics.opsFailures.WithLabelValues(OpGet)))
 	testutil.Equals(t, float64(0), promtest.ToFloat64(bkt.metrics.opsFailures.WithLabelValues(OpGetRange)))
 	testutil.Equals(t, float64(0), promtest.ToFloat64(bkt.metrics.opsFailures.WithLabelValues(OpExists)))
-	testutil.Equals(t, float64(0), promtest.ToFloat64(bkt.metrics.opsFailures.WithLabelValues(OpUpload)))
+	testutil.Equals(t, float64(stats.FailedUploadCount), promtest.ToFloat64(bkt.metrics.opsFailures.WithLabelValues(OpUpload)))
 	testutil.Equals(t, float64(0), promtest.ToFloat64(bkt.metrics.opsFailures.WithLabelValues(OpDelete)))
 	testutil.Equals(t, 7, promtest.CollectAndCount(bkt.metrics.opsFailures))
 	testutil.Equals(t, 7, promtest.CollectAndCount(bkt.metrics.opsDuration))
@@ -64,14 +56,14 @@ func TestMetricBucket_Close(t *testing.T) {
 
 	// Clear bucket, but don't clear metrics to ensure we use same.
 	bkt.bkt = NewInMemBucket()
-	AcceptanceTest(t, bkt)
+	stats2 := AcceptanceTest(t, bkt)
 	testutil.Equals(t, float64(18), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpIter)))
-	testutil.Equals(t, float64(4), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpAttributes)))
-	testutil.Equals(t, float64(6), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpGet)))
+	testutil.Equals(t, float64(stats.AttributesCount+stats2.AttributesCount), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpAttributes)))
+	testutil.Equals(t, float64(stats.GetCount+stats2.GetCount), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpGet)))
 	testutil.Equals(t, float64(6), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpGetRange)))
 	testutil.Equals(t, float64(4), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpExists)))
-	testutil.Equals(t, float64(18), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpUpload)))
-	testutil.Equals(t, float64(6), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpDelete)))
+	testutil.Equals(t, float64(stats.UploadCount+stats2.UploadCount), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpUpload)))
+	testutil.Equals(t, float64(stats.DeleteCount+stats2.DeleteCount), promtest.ToFloat64(bkt.metrics.ops.WithLabelValues(OpDelete)))
 	testutil.Equals(t, 7, promtest.CollectAndCount(bkt.metrics.ops))
 	testutil.Equals(t, float64(0), promtest.ToFloat64(bkt.metrics.opsFailures.WithLabelValues(OpIter)))
 	// Not expected not found error here.
@@ -80,7 +72,7 @@ func TestMetricBucket_Close(t *testing.T) {
 	testutil.Equals(t, float64(3), promtest.ToFloat64(bkt.metrics.opsFailures.WithLabelValues(OpGet)))
 	testutil.Equals(t, float64(0), promtest.ToFloat64(bkt.metrics.opsFailures.WithLabelValues(OpGetRange)))
 	testutil.Equals(t, float64(0), promtest.ToFloat64(bkt.metrics.opsFailures.WithLabelValues(OpExists)))
-	testutil.Equals(t, float64(0), promtest.ToFloat64(bkt.metrics.opsFailures.WithLabelValues(OpUpload)))
+	testutil.Equals(t, float64(stats.FailedUploadCount+stats2.FailedUploadCount), promtest.ToFloat64(bkt.metrics.opsFailures.WithLabelValues(OpUpload)))
 	testutil.Equals(t, float64(0), promtest.ToFloat64(bkt.metrics.opsFailures.WithLabelValues(OpDelete)))
 	testutil.Equals(t, 7, promtest.CollectAndCount(bkt.metrics.opsFailures))
 	testutil.Equals(t, 7, promtest.CollectAndCount(bkt.metrics.opsDuration))

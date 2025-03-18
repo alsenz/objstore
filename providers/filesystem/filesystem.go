@@ -293,13 +293,15 @@ func openSwap(name string) (swf *os.File, err error) {
 	}
 }
 
-func openFile(name string, ifNotExists bool) (f *os.File, exists bool, err error) {
+func tryOpenFile(name string, ifNotExists bool) (exists bool, err error) {
 	// First try to open the file with exclusive create, then truncate if permitted
 	flags := os.O_RDWR | os.O_CREATE | os.O_EXCL
+	var f *os.File
 	f, err = os.OpenFile(name, flags, 0666)
+	defer errcapture.Do(&err, f.Close, "close")
 	if errors.Is(err, fs.ErrExist) && !ifNotExists {
 		exists = true
-		flags = os.O_RDWR | os.O_CREATE | os.O_TRUNC
+		flags = os.O_RDWR | os.O_CREATE
 		f, err = os.OpenFile(name, flags, 0666)
 	}
 	return
@@ -339,11 +341,10 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 	defer errcapture.Do(&err, swf.Close, "close")
 	defer errcapture.Do(&err, clearSwap, "remove swap")
 
-	f, exists, err := openFile(file, params.IfNotExists)
+	exists, err := tryOpenFile(file, params.IfNotExists)
 	if err != nil {
 		return err
 	}
-	defer errcapture.Do(&err, f.Close, "close")
 
 	if err := b.checkConditions(ctx, name, params, exists); err != nil {
 		return err
@@ -352,15 +353,12 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 	if _, err := io.Copy(swf, r); err != nil {
 		return errors.Wrapf(err, "copy to %s", swap)
 	}
-	if err := swf.Sync(); err != nil {
-		return err
-	}
 	// Move swap into target, atomic on unix for which IfNotExists is supported.
 	if err := os.Rename(swap, file); err != nil {
 		return err
 	}
 
-	return nil
+	return
 }
 
 func (b *Bucket) checkConditions(ctx context.Context, name string, params objstore.UploadParams, exists bool) error {
@@ -381,8 +379,6 @@ func (b *Bucket) checkConditions(ctx context.Context, name string, params objsto
 			return err
 		}
 		chksum := crc32.Checksum(bytes, table)
-		//fmt.Printf("go to here?")
-		fmt.Fprintln(os.Stderr, "got to here?")
 		if params.IfNotMatch && strconv.Itoa(int(chksum)) == params.Condition.Value {
 			return errConditionNotMet
 		} else if !params.IfNotMatch && strconv.Itoa(int(chksum)) != params.Condition.Value {
@@ -451,8 +447,10 @@ func (b *Bucket) IsAccessDeniedErr(_ error) bool {
 	return false
 }
 
-// TODO add acceptance test checks for this.
-func (b *Bucket) IsConditionNotMetErr(err error) bool { return errors.Is(err, errConditionNotMet) }
+func (b *Bucket) IsConditionNotMetErr(err error) bool {
+	fmt.Printf("IsConditionNotMetErr? %s, isExist? %t\n", err, os.IsExist(err))
+	return errors.Is(err, errConditionNotMet) || errors.Is(err, fs.ErrExist)
+}
 
 func (b *Bucket) Close() error { return nil }
 

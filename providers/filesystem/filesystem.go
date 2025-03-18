@@ -293,16 +293,19 @@ func openSwap(name string) (swf *os.File, err error) {
 	}
 }
 
+// TODO this is invalid argumenting if the file is already exisitng
 func tryOpenFile(name string, ifNotExists bool) (exists bool, err error) {
 	// First try to open the file with exclusive create, then truncate if permitted
 	flags := os.O_RDWR | os.O_CREATE | os.O_EXCL
 	var f *os.File
 	f, err = os.OpenFile(name, flags, 0666)
-	defer errcapture.Do(&err, f.Close, "close")
 	if errors.Is(err, fs.ErrExist) && !ifNotExists {
 		exists = true
-		flags = os.O_RDWR | os.O_CREATE
+		flags = os.O_RDWR | os.O_CREATE | os.O_APPEND
 		f, err = os.OpenFile(name, flags, 0666)
+	}
+	if err != nil && f != nil {
+		err = f.Close()
 	}
 	return
 }

@@ -63,6 +63,8 @@ type Config struct {
 	MaxRetries int `yaml:"max_retries"`
 }
 
+var errConditionInvalid = errors.New("invalid condition: gcs supports generational object versions")
+
 // Bucket implements the store.Bucket and shipper.Bucket interfaces against GCS.
 type Bucket struct {
 	logger    log.Logger
@@ -347,6 +349,9 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 
 	obj := b.bkt.Object(name)
 	if params.Condition != nil {
+		if params.Condition.Type != objstore.Generation {
+			return errConditionInvalid
+		}
 		g8n, err := strconv.Atoi(params.Condition.Value)
 		if err != nil {
 			return err
@@ -397,15 +402,16 @@ func (b *Bucket) IsAccessDeniedErr(err error) bool {
 }
 
 func (b *Bucket) IsConditionNotMetErr(err error) bool {
-	//TODO remove!
 	//TODO add a specific unit test for this.
-	fmt.Println("Error is: ", err)
 	var gapiErr *googleapi.Error
-	if errors.As(err, &gapiErr) && gapiErr.Code == http.StatusPreconditionFailed {
+	// https://cloud.google.com/storage/docs/json_api/v1/status-codes
+	//TODO differentiate precondition failed due to condition errors
+	if errors.As(err, &gapiErr) &&
+		(gapiErr.Code == http.StatusPreconditionFailed ||
+			gapiErr.Code == http.StatusNotModified) {
 		return true
 	}
-	fmt.Println("gapiErr is: ", gapiErr)
-	return false
+	return errors.Is(err, errConditionInvalid)
 }
 
 func (b *Bucket) Close() error {

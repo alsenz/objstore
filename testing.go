@@ -310,11 +310,13 @@ func AcceptanceTest(t *testing.T, bkt Bucket) AcceptanceStats {
 	// If supported, test IfMatch write option
 	if slices.Contains(bkt.SupportedUploadOptions(), IfMatch) {
 		testutil.Ok(t, bkt.Upload(ctx, "obj_8.some", strings.NewReader("@test-data8@")))
-		// Can't and won't write if version doesn't match dummy version
-		nullVer := &ObjectVersion{ETag, "000"} //TODO aha. Flaw in the test
-		//TODO - what should be the behaviour if the object store doesn't support ETag? I suppose it wants a ConditionNotMet error!
-		//TODO TODO! So we should have errInvalidVersionType. But then this acceptance test should try with version and with Etag!
-		err = bkt.Upload(ctx, "obj_8.some", strings.NewReader("@test-data8.2@"), WithIfMatch(nullVer))
+		// Can't and won't write if version doesn't match dummy version - try both types of version
+		nullEtag := &ObjectVersion{ETag, "dummy"}
+		err = bkt.Upload(ctx, "obj_8.some", strings.NewReader("@test-data8.2@"), WithIfMatch(nullEtag))
+		testutil.NotOk(t, err)
+		testutil.Assert(t, bkt.IsConditionNotMetErr(err))
+		nullG8n := &ObjectVersion{Generation, "-1"}
+		err = bkt.Upload(ctx, "obj_8.some", strings.NewReader("@test-data8.2@"), WithIfMatch(nullG8n))
 		testutil.NotOk(t, err)
 		testutil.Assert(t, bkt.IsConditionNotMetErr(err))
 		rc8, err := bkt.Get(ctx, "obj_8.some")
@@ -334,10 +336,10 @@ func AcceptanceTest(t *testing.T, bkt Bucket) AcceptanceStats {
 		// Delete
 		testutil.Ok(t, bkt.Delete(ctx, "obj_8.some"))
 		stats.GetCount += 2
-		stats.UploadCount += 3
+		stats.UploadCount += 4
 		stats.AttributesCount += 1
 		stats.DeleteCount += 1
-		stats.FailedUploadCount += 1
+		stats.FailedUploadCount += 2
 	}
 
 	// If supported, test IfNotMatch write option
@@ -346,7 +348,11 @@ func AcceptanceTest(t *testing.T, bkt Bucket) AcceptanceStats {
 		firstAttrs, err := bkt.Attributes(ctx, "obj_9.some")
 		testutil.Ok(t, err)
 		// Can't write if the object versions match
+		if firstAttrs.Version != nil {
+			fmt.Println("firstAttrs", firstAttrs.Version.Value)
+		}
 		err = bkt.Upload(ctx, "obj_9.some", strings.NewReader("@test-data9.2@"), WithIfNotMatch(firstAttrs.Version))
+		fmt.Println("err", err)
 		testutil.NotOk(t, err)
 		testutil.Assert(t, bkt.IsConditionNotMetErr(err))
 		// Update the object

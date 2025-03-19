@@ -7,9 +7,11 @@ package gcs
 import (
 	"context"
 	"fmt"
+	"google.golang.org/api/googleapi"
 	"io"
 	"net/http"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -309,9 +311,11 @@ func (b *Bucket) Attributes(ctx context.Context, name string) (objstore.ObjectAt
 		return objstore.ObjectAttributes{}, err
 	}
 
+	//TODO add acceptance test to check that version isn't null!
 	return objstore.ObjectAttributes{
 		Size:         attrs.Size,
 		LastModified: attrs.Updated,
+		Version:      &objstore.ObjectVersion{Type: objstore.Generation, Value: strconv.Itoa(int(attrs.Generation))},
 	}, nil
 }
 
@@ -333,12 +337,30 @@ func (b *Bucket) Exists(ctx context.Context, name string) (bool, error) {
 
 // Upload writes the file specified in src to remote GCS location specified as target.
 func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.UploadOption) error {
-	//TODO add support for filesystem write conditions
 	if err := objstore.ValidateUploadOptions(b.SupportedUploadOptions(), options...); err != nil {
 		return err
 	}
 
-	w := b.bkt.Object(name).NewWriter(ctx)
+	params := objstore.ApplyUploadOptions(options...)
+
+	//TODO write some upload grpc emu tests
+
+	obj := b.bkt.Object(name)
+	if params.Condition != nil {
+		g8n, err := strconv.Atoi(params.Condition.Value)
+		if err != nil {
+			return err
+		}
+		if params.IfNotMatch {
+			obj = obj.If(storage.Conditions{GenerationNotMatch: int64(g8n)})
+		} else {
+			obj = obj.If(storage.Conditions{GenerationMatch: int64(g8n)})
+		}
+	} else if params.IfNotExists {
+		obj = obj.If(storage.Conditions{DoesNotExist: true})
+	}
+
+	w := obj.NewWriter(ctx)
 
 	// if `chunkSize` is 0, we don't set any custom value for writer's ChunkSize.
 	// It uses whatever the default value https://pkg.go.dev/google.golang.org/cloud/storage#Writer
@@ -353,7 +375,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 }
 
 func (b *Bucket) SupportedUploadOptions() []objstore.UploadOptionType {
-	return []objstore.UploadOptionType{}
+	return []objstore.UploadOptionType{objstore.IfNotExists, objstore.IfMatch, objstore.IfNotMatch}
 }
 
 // Delete removes the object with the given name.
@@ -374,8 +396,17 @@ func (b *Bucket) IsAccessDeniedErr(err error) bool {
 	return false
 }
 
-// TODO implement
-func (b *Bucket) IsConditionNotMetErr(err error) bool { return false }
+func (b *Bucket) IsConditionNotMetErr(err error) bool {
+	//TODO remove!
+	//TODO add a specific unit test for this.
+	fmt.Println("Error is: ", err)
+	var gapiErr *googleapi.Error
+	if errors.As(err, &gapiErr) && gapiErr.Code == http.StatusPreconditionFailed {
+		return true
+	}
+	fmt.Println("gapiErr is: ", gapiErr)
+	return false
+}
 
 func (b *Bucket) Close() error {
 	return b.closer.Close()

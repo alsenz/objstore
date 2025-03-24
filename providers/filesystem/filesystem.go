@@ -5,24 +5,25 @@ package filesystem
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
-	"hash/crc32" //TODO let's use this...
+	"github.com/efficientgo/core/errcapture"
+	"github.com/pkg/errors"
+	"github.com/pkg/xattr"
+	"gopkg.in/yaml.v2"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
-	"strconv"
-
-	"github.com/efficientgo/core/errcapture"
-	"github.com/pkg/errors"
-	"gopkg.in/yaml.v2"
 
 	"github.com/thanos-io/objstore"
 )
 
 var errConditionNotMet = errors.New("filesystem: upload condition not met")
+
+const xAttrKey = "thanos_objstore.sha256sum"
 
 // Config stores the configuration for storing and accessing blobs in filesystem.
 type Config struct {
@@ -35,8 +36,6 @@ type Config struct {
 type Bucket struct {
 	rootDir string
 }
-
-var table = crc32.MakeTable(crc32.IEEE)
 
 // NewBucketFromConfig returns a new filesystem.Bucket from config.
 func NewBucketFromConfig(conf []byte) (*Bucket, error) {
@@ -168,7 +167,7 @@ func (r *rangeReaderCloser) Close() error {
 	return r.f.Close()
 }
 
-// Attributes returns information about the specified object.
+// Attributes returns information about the specified object. Only returns the version metadata if the object was written with a supported version.
 func (b *Bucket) Attributes(ctx context.Context, name string) (objstore.ObjectAttributes, error) {
 	if ctx.Err() != nil {
 		return objstore.ObjectAttributes{}, ctx.Err()
@@ -187,29 +186,22 @@ func (b *Bucket) Attributes(ctx context.Context, name string) (objstore.ObjectAt
 		}, nil
 	}
 
-	//TODO redo this to be an xattr based implementation where the checksum gets written on write.
-	//TODO just have this temporarily like this for now.
-
-	//TODO only return version if supported...
-
-	rc, err := b.Get(ctx, name)
+	chkSum, err := b.checksum(name)
 	if err != nil {
 		return objstore.ObjectAttributes{}, err
 	}
-	defer errcapture.Do(&err, rc.Close, "close")
-	bytes, err := io.ReadAll(rc)
-	if err != nil {
-		return objstore.ObjectAttributes{}, err
+	var version *objstore.ObjectVersion
+	if chkSum != "" {
+		version = &objstore.ObjectVersion{
+			Type:  objstore.ETag,
+			Value: chkSum,
+		}
 	}
-	chksum := crc32.Checksum(bytes, table)
 
 	return objstore.ObjectAttributes{
 		Size:         stat.Size(),
 		LastModified: stat.ModTime(),
-		Version: &objstore.ObjectVersion{
-			Type:  objstore.ETag,
-			Value: strconv.Itoa(int(chksum)), //TODO why isn't this an error?
-		},
+		Version:      version,
 	}, nil
 }
 
@@ -282,6 +274,7 @@ func (b *Bucket) Exists(ctx context.Context, name string) (bool, error) {
 	return !info.IsDir(), nil
 }
 
+// TODO document
 func openSwap(name string) (swf *os.File, err error) {
 	for {
 		swf, err = os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
@@ -349,14 +342,21 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 		return err
 	}
 
-	if err := b.checkConditions(ctx, name, params, exists); err != nil {
+	if err := b.checkConditions(name, params, exists); err != nil {
 		return err
 	}
 
-	if _, err := io.Copy(swf, r); err != nil {
+	h := sha256.New()
+	writer := io.MultiWriter(swf, h)
+	if _, err := io.Copy(writer, r); err != nil {
 		return errors.Wrapf(err, "copy to %s", swap)
 	}
-	// Move swap into target, atomic on unix for which IfNotExists is supported.
+	// Write the checksum into an xattr
+	if err := xattr.Set(swap, xAttrKey, h.Sum(nil)); err != nil {
+		return err
+	}
+
+	// Move swap into target, atomic on unix for which IfNotExists is supported. Will be same mount as is same directory.
 	if err := os.Rename(swap, file); err != nil {
 		return err
 	}
@@ -364,7 +364,17 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 	return
 }
 
-func (b *Bucket) checkConditions(ctx context.Context, name string, params objstore.UploadParams, exists bool) error {
+// checksum reads an X-Attr for the checksum property if it was written with the file, or empty string if it was not.
+func (b *Bucket) checksum(name string) (string, error) {
+	file := filepath.Join(b.rootDir, name)
+	bytes, err := xattr.Get(file, xAttrKey)
+	if err != nil {
+		return "", err // Legacy filesystem buckets would just return empty string for the version (until objects updated)
+	}
+	return string(bytes), nil
+}
+
+func (b *Bucket) checkConditions(name string, params objstore.UploadParams, exists bool) error {
 	if params.Condition != nil && !exists && !params.IfNotMatch {
 		return errConditionNotMet
 	}
@@ -372,19 +382,13 @@ func (b *Bucket) checkConditions(ctx context.Context, name string, params objsto
 		if params.Condition.Type != objstore.ETag {
 			return errConditionNotMet
 		}
-		rc, err := b.Get(ctx, name)
+		chkSum, err := b.checksum(name)
 		if err != nil {
 			return err
 		}
-		defer errcapture.Do(&err, rc.Close, "close")
-		bytes, err := io.ReadAll(rc)
-		if err != nil {
-			return err
-		}
-		chksum := crc32.Checksum(bytes, table)
-		if params.IfNotMatch && strconv.Itoa(int(chksum)) == params.Condition.Value {
+		if params.IfNotMatch && chkSum == params.Condition.Value {
 			return errConditionNotMet
-		} else if !params.IfNotMatch && strconv.Itoa(int(chksum)) != params.Condition.Value {
+		} else if !params.IfNotMatch && chkSum != params.Condition.Value {
 			return errConditionNotMet
 		}
 	}

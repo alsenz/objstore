@@ -345,7 +345,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 
 	params := objstore.ApplyUploadOptions(options...)
 
-	//TODO write some upload grpc emu tests
+	//TODO write some upload grpc emu tests?
 
 	obj := b.bkt.Object(name)
 	if params.Condition != nil {

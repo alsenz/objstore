@@ -23,7 +23,7 @@ import (
 
 var errConditionNotMet = errors.New("filesystem: upload condition not met")
 
-const xAttrKey = "thanos_objstore.sha256sum"
+const xAttrKey = "user.thanos.objstore.sha256sum"
 
 // Config stores the configuration for storing and accessing blobs in filesystem.
 type Config struct {

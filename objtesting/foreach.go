@@ -57,7 +57,6 @@ func ForeachStore[R any](t *testing.T, testFn func(t *testing.T, bkt objstore.Bu
 	t.Run("filesystem", func(t *testing.T) {
 		t.Parallel()
 
-		//TODO why are xattrs not supported in temp?
 		dir, err := os.MkdirTemp("", "filesystem-foreach-store-test")
 		testutil.Ok(t, err)
 		defer testutil.Ok(t, os.RemoveAll(dir))

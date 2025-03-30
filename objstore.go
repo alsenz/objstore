@@ -235,8 +235,6 @@ func applyDownloadOptions(options ...DownloadOption) downloadParams {
 	return out
 }
 
-//TODO sort this to be used in upload dir....
-
 // UploadOption configures the provided params.
 type UploadOption func(params *uploadParams)
 

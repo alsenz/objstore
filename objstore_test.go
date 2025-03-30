@@ -583,7 +583,7 @@ type mockBucket struct {
 	getRange func(ctx context.Context, name string, off, length int64) (io.ReadCloser, error)
 }
 
-func (b *mockBucket) Upload(ctx context.Context, name string, r io.Reader, options ...UploadOption) error {
+func (b *mockBucket) Upload(ctx context.Context, name string, r io.Reader, options ...ObjectUploadOption) error {
 	if b.upload != nil {
 		return b.upload(ctx, name, r)
 	}

@@ -119,8 +119,8 @@ func (i *InMemBucket) SupportedIterOptions() []IterOptionType {
 	return []IterOptionType{Recursive}
 }
 
-func (i *InMemBucket) SupportedUploadOptions() []UploadOptionType {
-	return []UploadOptionType{IfNotExists, IfMatch, IfNotMatch}
+func (i *InMemBucket) SupportedObjectUploadOptions() []ObjectUploadOptionType {
+	return []ObjectUploadOptionType{IfNotExists, IfMatch, IfNotMatch}
 }
 
 func (b *InMemBucket) IterWithAttributes(ctx context.Context, dir string, f func(attrs IterObjectAttributes) error, options ...IterOption) error {
@@ -224,7 +224,7 @@ func (b *InMemBucket) Attributes(_ context.Context, name string) (ObjectAttribut
 }
 
 // Upload writes the file specified in src to into the memory.
-func (b *InMemBucket) Upload(_ context.Context, name string, r io.Reader, options ...UploadOption) error {
+func (b *InMemBucket) Upload(_ context.Context, name string, r io.Reader, options ...ObjectUploadOption) error {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 

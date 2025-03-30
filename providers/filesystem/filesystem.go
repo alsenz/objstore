@@ -179,7 +179,7 @@ func (b *Bucket) Attributes(ctx context.Context, name string) (objstore.ObjectAt
 		return objstore.ObjectAttributes{}, errors.Wrapf(err, "stat %s", file)
 	}
 
-	if !slices.Contains(b.SupportedUploadOptions(), objstore.IfMatch) && !slices.Contains(b.SupportedUploadOptions(), objstore.IfNotMatch) {
+	if !slices.Contains(b.SupportedObjectUploadOptions(), objstore.IfMatch) && !slices.Contains(b.SupportedObjectUploadOptions(), objstore.IfNotMatch) {
 		return objstore.ObjectAttributes{
 			Size:         stat.Size(),
 			LastModified: stat.ModTime(),
@@ -302,9 +302,9 @@ func tryOpenFile(name string, ifNotExists bool) (exists bool, err error) {
 }
 
 // Upload writes the file specified in src to into the memory.
-func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.UploadOption) (err error) {
+func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.ObjectUploadOption) (err error) {
 
-	if err := objstore.ValidateUploadOptions(b.SupportedUploadOptions(), options...); err != nil {
+	if err := objstore.ValidateUploadOptions(b.SupportedObjectUploadOptions(), options...); err != nil {
 		return err
 	}
 
@@ -372,7 +372,7 @@ func (b *Bucket) checksum(name string) (string, error) {
 	return string(bytes), nil
 }
 
-func (b *Bucket) checkConditions(name string, params objstore.UploadParams, exists bool) error {
+func (b *Bucket) checkConditions(name string, params objstore.UploadObjectParams, exists bool) error {
 	if params.Condition != nil && !exists && !params.IfNotMatch {
 		return errConditionNotMet
 	}
@@ -394,12 +394,12 @@ func (b *Bucket) checkConditions(name string, params objstore.UploadParams, exis
 	return nil
 }
 
-func (b *Bucket) SupportedUploadOptions() []objstore.UploadOptionType {
+func (b *Bucket) SupportedObjectUploadOptions() []objstore.ObjectUploadOptionType {
 	if runtime.GOOS == "windows" {
 		// Moves are not guaranteed to be atomic
-		return []objstore.UploadOptionType{}
+		return []objstore.ObjectUploadOptionType{}
 	}
-	return []objstore.UploadOptionType{objstore.IfNotExists, objstore.IfMatch, objstore.IfNotMatch}
+	return []objstore.ObjectUploadOptionType{objstore.IfNotExists, objstore.IfMatch, objstore.IfNotMatch}
 }
 
 func isDirEmpty(name string) (ok bool, err error) {

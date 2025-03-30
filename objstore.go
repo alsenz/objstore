@@ -62,10 +62,10 @@ type Bucket interface {
 
 	// Upload the contents of the reader as an object into the bucket.
 	// Upload should be idempotent.
-	Upload(ctx context.Context, name string, r io.Reader, options ...UploadOption) error
+	Upload(ctx context.Context, name string, r io.Reader, options ...ObjectUploadOption) error
 
-	// SupporterWriteOptions returns a list of supported WriteOptions by the underlying provider.
-	SupportedUploadOptions() []UploadOptionType
+	// SupportedObjectUploadOptions returns a list of ObjectUploadOptions supported by the underlying provider.
+	SupportedObjectUploadOptions() []ObjectUploadOptionType
 
 	// Delete removes the object with the given name.
 	// If object does not exist in the moment of deletion, Delete should throw error.
@@ -122,7 +122,7 @@ type BucketReader interface {
 	// IsAccessDeniedErr returns true if access to object is denied.
 	IsAccessDeniedErr(err error) bool
 
-	// IsConditionNotMet returns true if an UploadOption condition parameter (IfNotExists, IfMatch, IfNotMatch) was not met
+	// IsConditionNotMet returns true if an ObjectUploadOption condition parameter (IfNotExists, IfMatch, IfNotMatch) was not met
 	IsConditionNotMetErr(err error) bool
 
 	// Attributes returns information about the specified object.
@@ -235,77 +235,96 @@ func applyDownloadOptions(options ...DownloadOption) downloadParams {
 	return out
 }
 
-var ErrUploadOptionNotSupported = errors.New("upload option is not supported")
-var ErrUploadOptionInvalid = errors.New("upload option is invalid")
+//TODO sort this to be used in upload dir....
 
-type UploadOptionType int
+// UploadOption configures the provided params.
+type UploadOption func(params *uploadParams)
 
-const (
-	Concurrency UploadOptionType = iota
-	IfNotExists
-	IfMatch
-	IfNotMatch
-)
-
-type UploadOption struct {
-	Type  UploadOptionType
-	Apply func(params *UploadParams)
-}
-
-// TODO see if we can make this private
-// UploadParams hold concurrency and conditional write attribute metadata
-type UploadParams struct {
-	Concurrency int
-	IfNotExists bool
-	IfNotMatch  bool
-	Condition   *ObjectVersion //TODO make condition not supported for UploadDirectory.
+// uploadParams holds the UploadDir() parameters and is used by objstore clients implementations.
+type uploadParams struct {
+	concurrency int
 }
 
 // WithUploadConcurrency is an option to set the concurrency of the upload operation.
 func WithUploadConcurrency(concurrency int) UploadOption {
-	return UploadOption{
-		Type: Concurrency,
-		Apply: func(params *UploadParams) {
-			params.Concurrency = concurrency
-		},
+	return func(params *uploadParams) {
+		params.concurrency = concurrency
 	}
 }
 
-func WithIfNotExists() UploadOption {
-	return UploadOption{
+func applyUploadOptions(options ...UploadOption) uploadParams {
+	out := uploadParams{
+		concurrency: 1,
+	}
+	for _, opt := range options {
+		opt(&out)
+	}
+	return out
+}
+
+var ErrUploadOptionNotSupported = errors.New("upload option is not supported")
+var ErrUploadOptionInvalid = errors.New("upload option is invalid")
+
+type ObjectUploadOptionType int
+
+const (
+	IfNotExists ObjectUploadOptionType = iota
+	IfMatch
+	IfNotMatch
+)
+
+type ObjectUploadOption struct {
+	Type  ObjectUploadOptionType
+	Apply func(params *UploadObjectParams)
+}
+
+// TODO see if we can make this private
+// UploadObjectParams hold concurrency and conditional write attribute metadata
+type UploadObjectParams struct {
+	IfNotExists bool
+	IfNotMatch  bool
+	Condition   *ObjectVersion
+}
+
+// TODO document
+func WithIfNotExists() ObjectUploadOption {
+	return ObjectUploadOption{
 		Type: IfNotExists,
-		Apply: func(params *UploadParams) {
+		Apply: func(params *UploadObjectParams) {
 			params.IfNotExists = true
 		},
 	}
 }
 
-func WithIfMatch(ver *ObjectVersion) UploadOption {
-	return UploadOption{
+// TODO document
+func WithIfMatch(ver *ObjectVersion) ObjectUploadOption {
+	return ObjectUploadOption{
 		Type: IfMatch,
-		Apply: func(params *UploadParams) {
+		Apply: func(params *UploadObjectParams) {
 			params.Condition = ver
 		},
 	}
 }
 
-func WithIfNotMatch(ver *ObjectVersion) UploadOption {
-	return UploadOption{
+// TODO document
+func WithIfNotMatch(ver *ObjectVersion) ObjectUploadOption {
+	return ObjectUploadOption{
 		Type: IfNotMatch,
-		Apply: func(params *UploadParams) {
+		Apply: func(params *UploadObjectParams) {
 			params.Condition = ver
 			params.IfNotMatch = true
 		},
 	}
 }
 
-func ValidateUploadOptions(supportedOptions []UploadOptionType, options ...UploadOption) error {
+// TODO document
+func ValidateUploadOptions(supportedOptions []ObjectUploadOptionType, options ...ObjectUploadOption) error {
 	for _, opt := range options {
 		if !slices.Contains(supportedOptions, opt.Type) {
 			return fmt.Errorf("%w: %d", ErrUploadOptionNotSupported, opt.Type)
 		}
 		if opt.Type == IfMatch || opt.Type == IfNotMatch {
-			candidate := &UploadParams{}
+			candidate := &UploadObjectParams{}
 			opt.Apply(candidate)
 			if candidate.Condition == nil {
 				return fmt.Errorf("%w: Condition nil", ErrUploadOptionInvalid)
@@ -315,8 +334,9 @@ func ValidateUploadOptions(supportedOptions []UploadOptionType, options ...Uploa
 	return nil
 }
 
-func ApplyUploadOptions(options ...UploadOption) UploadParams {
-	out := UploadParams{}
+// TODO document
+func ApplyUploadOptions(options ...ObjectUploadOption) UploadObjectParams {
+	out := UploadObjectParams{}
 	for _, opt := range options {
 		opt.Apply(&out)
 	}
@@ -334,6 +354,7 @@ type ObjectAttributes struct {
 	Version *ObjectVersion `json:"version,omitempty"`
 }
 
+// TODO documentation in general for ObjectVersion
 type ObjectVersionType int
 
 const (
@@ -409,15 +430,12 @@ func NopCloserWithSize(r io.Reader) io.ReadCloser {
 // named dstdir. It is a caller responsibility to clean partial upload in case of failure.
 func UploadDir(ctx context.Context, logger log.Logger, bkt Bucket, srcdir, dstdir string, options ...UploadOption) error {
 	df, err := os.Stat(srcdir)
-	opts := ApplyUploadOptions(options...)
-	if opts.Condition != nil {
-		return fmt.Errorf("condition not supported for UploadDir: %w", ErrUploadOptionInvalid)
-	}
+	opts := applyUploadOptions(options...)
 
 	// The derived Context is canceled the first time a function passed to Go returns a non-nil error or the first
 	// time Wait returns, whichever occurs first.
 	g, ctx := errgroup.WithContext(ctx)
-	g.SetLimit(opts.Concurrency)
+	g.SetLimit(opts.concurrency)
 
 	if err != nil {
 		return errors.Wrap(err, "stat dir")
@@ -439,7 +457,7 @@ func UploadDir(ctx context.Context, logger log.Logger, bkt Bucket, srcdir, dstdi
 			}
 
 			dst := path.Join(dstdir, filepath.ToSlash(srcRel))
-			return UploadFile(ctx, logger, bkt, src, dst, options...)
+			return UploadFile(ctx, logger, bkt, src, dst)
 		})
 
 		return nil
@@ -454,7 +472,7 @@ func UploadDir(ctx context.Context, logger log.Logger, bkt Bucket, srcdir, dstdi
 
 // UploadFile uploads the file with the given name to the bucket.
 // It is a caller responsibility to clean partial upload in case of failure.
-func UploadFile(ctx context.Context, logger log.Logger, bkt Bucket, src, dst string, options ...UploadOption) error {
+func UploadFile(ctx context.Context, logger log.Logger, bkt Bucket, src, dst string, options ...ObjectUploadOption) error {
 	r, err := os.Open(filepath.Clean(src))
 	if err != nil {
 		return errors.Wrapf(err, "open file %s", src)
@@ -748,8 +766,8 @@ func (b *metricBucket) SupportedIterOptions() []IterOptionType {
 	return b.bkt.SupportedIterOptions()
 }
 
-func (b *metricBucket) SupportedUploadOptions() []UploadOptionType {
-	return b.bkt.SupportedUploadOptions()
+func (b *metricBucket) SupportedObjectUploadOptions() []ObjectUploadOptionType {
+	return b.bkt.SupportedObjectUploadOptions()
 }
 
 func (b *metricBucket) Attributes(ctx context.Context, name string) (ObjectAttributes, error) {
@@ -838,7 +856,7 @@ func (b *metricBucket) Exists(ctx context.Context, name string) (bool, error) {
 	return ok, nil
 }
 
-func (b *metricBucket) Upload(ctx context.Context, name string, r io.Reader, options ...UploadOption) error {
+func (b *metricBucket) Upload(ctx context.Context, name string, r io.Reader, options ...ObjectUploadOption) error {
 	const op = OpUpload
 	b.metrics.ops.WithLabelValues(op).Inc()
 

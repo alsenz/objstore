@@ -337,8 +337,8 @@ func (b *Bucket) Exists(ctx context.Context, name string) (bool, error) {
 }
 
 // Upload writes the file specified in src to remote GCS location specified as target.
-func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.UploadOption) error {
-	if err := objstore.ValidateUploadOptions(b.SupportedUploadOptions(), options...); err != nil {
+func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.ObjectUploadOption) error {
+	if err := objstore.ValidateUploadOptions(b.SupportedObjectUploadOptions(), options...); err != nil {
 		return err
 	}
 
@@ -376,8 +376,8 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 	return w.Close()
 }
 
-func (b *Bucket) SupportedUploadOptions() []objstore.UploadOptionType {
-	return []objstore.UploadOptionType{objstore.IfNotExists, objstore.IfMatch, objstore.IfNotMatch}
+func (b *Bucket) SupportedObjectUploadOptions() []objstore.ObjectUploadOptionType {
+	return []objstore.ObjectUploadOptionType{objstore.IfNotExists, objstore.IfMatch, objstore.IfNotMatch}
 }
 
 // Delete removes the object with the given name.

@@ -343,7 +343,7 @@ func ValidateUploadOptions(supportedOptions []ObjectUploadOptionType, options ..
 }
 
 // TODO document
-func ApplyUploadOptions(options ...ObjectUploadOption) UploadObjectParams {
+func ApplyObjectUploadOptions(options ...ObjectUploadOption) UploadObjectParams {
 	out := UploadObjectParams{}
 	for _, opt := range options {
 		opt.Apply(&out)

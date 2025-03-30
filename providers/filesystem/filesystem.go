@@ -318,7 +318,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 		return err
 	}
 
-	params := objstore.ApplyUploadOptions(options...)
+	params := objstore.ApplyObjectUploadOptions(options...)
 
 	// Filesystem provider for debugging & troubleshooting uses a swap file as a file lock.
 	swf, err := openSwap(swap)

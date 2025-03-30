@@ -20,8 +20,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/version"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/api/iterator"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	htransport "google.golang.org/api/transport/http"
 	"google.golang.org/grpc/codes"
@@ -342,7 +342,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 		return err
 	}
 
-	params := objstore.ApplyUploadOptions(options...)
+	params := objstore.ApplyObjectUploadOptions(options...)
 
 	obj := b.bkt.Object(name)
 	if params.Condition != nil {

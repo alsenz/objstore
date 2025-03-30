@@ -385,7 +385,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 		return err
 	}
 
-	uploadOptions := objstore.ApplyUploadOptions(options...)
+	uploadOptions := objstore.ApplyObjectUploadOptions(options...)
 
 	var conds *blob.ModifiedAccessConditions = nil
 	if uploadOptions.Condition != nil {

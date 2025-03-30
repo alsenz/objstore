@@ -228,7 +228,7 @@ func (b *InMemBucket) Upload(_ context.Context, name string, r io.Reader, option
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
-	params := ApplyUploadOptions(options...)
+	params := ApplyObjectUploadOptions(options...)
 	generation := 0
 
 	if prev, ok := b.attrs[name]; ok {

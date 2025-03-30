@@ -222,7 +222,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 	if err != nil {
 		return errors.Wrapf(err, "getting size of %s", name)
 	}
-	uploadOpts := objstore.ApplyObjectUploadOptions(opts...)
+	uploadOpts := objstore.ApplyObjectUploadOptions(options...)
 
 	// partSize 128MB.
 	const partSize = 1024 * 1024 * 128

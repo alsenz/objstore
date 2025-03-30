@@ -123,7 +123,7 @@ func (b *Bucket) Upload(_ context.Context, name string, r io.Reader, options ...
 		return errors.Wrapf(err, "getting size of %s", name)
 	}
 
-	uploadOpts := objstore.ApplyObjectUploadOptions(opts...)
+	uploadOpts := objstore.ApplyObjectUploadOptions(options...)
 	partNums, lastSlice := int(math.Floor(float64(size)/partSize)), size%partSize
 	if partNums == 0 {
 		body, err := bce.NewBodyFromSizedReader(r, lastSlice)

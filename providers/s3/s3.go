@@ -559,7 +559,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 		userMetadata[k] = v
 	}
 
-	uploadOpts := objstore.ApplyObjectUploadOptions(opts...)
+	uploadOpts := objstore.ApplyObjectUploadOptions(options...)
 
 	if _, err := b.client.PutObject(
 		ctx,

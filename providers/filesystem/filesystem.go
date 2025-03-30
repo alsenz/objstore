@@ -274,7 +274,6 @@ func (b *Bucket) Exists(ctx context.Context, name string) (bool, error) {
 	return !info.IsDir(), nil
 }
 
-// TODO document
 func openSwap(name string) (swf *os.File, err error) {
 	for {
 		swf, err = os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
@@ -286,7 +285,6 @@ func openSwap(name string) (swf *os.File, err error) {
 	}
 }
 
-// TODO this is invalid argumenting if the file is already exisitng
 func tryOpenFile(name string, ifNotExists bool) (exists bool, err error) {
 	// First try to open the file with exclusive create, then truncate if permitted
 	flags := os.O_RDWR | os.O_CREATE | os.O_EXCL
@@ -454,6 +452,7 @@ func (b *Bucket) IsAccessDeniedErr(_ error) bool {
 	return false
 }
 
+// IsConditionNotMetErr returns true if the error is an internal condition not met error or a ErrExist filesystem error
 func (b *Bucket) IsConditionNotMetErr(err error) bool {
 	return errors.Is(err, errConditionNotMet) || errors.Is(err, fs.ErrExist)
 }

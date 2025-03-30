@@ -307,8 +307,8 @@ func (b *Bucket) IsAccessDeniedErr(err error) bool {
 	return bloberror.HasCode(err, bloberror.AuthorizationPermissionMismatch) || bloberror.HasCode(err, bloberror.InsufficientAccountPermissions)
 }
 
+// IsConditionNotMetErr returns true if the error was a blob error nad the code is ConditionNotMet, or BlobAlreadyExists
 func (b *Bucket) IsConditionNotMetErr(err error) bool {
-	//TODO - maybe unit tests for this?
 	return errors.Is(err, errConditionInvalid) ||
 		bloberror.HasCode(err, bloberror.BlobAlreadyExists) ||
 		bloberror.HasCode(err, bloberror.ConditionNotMet)

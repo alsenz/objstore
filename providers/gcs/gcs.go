@@ -313,7 +313,6 @@ func (b *Bucket) Attributes(ctx context.Context, name string) (objstore.ObjectAt
 		return objstore.ObjectAttributes{}, err
 	}
 
-	//TODO add acceptance test to check that version isn't null!
 	return objstore.ObjectAttributes{
 		Size:         attrs.Size,
 		LastModified: attrs.Updated,
@@ -344,8 +343,6 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 	}
 
 	params := objstore.ApplyUploadOptions(options...)
-
-	//TODO write some upload grpc emu tests?
 
 	obj := b.bkt.Object(name)
 	if params.Condition != nil {
@@ -401,11 +398,10 @@ func (b *Bucket) IsAccessDeniedErr(err error) bool {
 	return false
 }
 
+// IsConditionNotMetErr returns true if the response status code was Precondition Failed or Not Modified
 func (b *Bucket) IsConditionNotMetErr(err error) bool {
-	//TODO add a specific unit test for this.
 	var gapiErr *googleapi.Error
-	// https://cloud.google.com/storage/docs/json_api/v1/status-codes
-	//TODO differentiate precondition failed due to condition errors
+	//From: https://cloud.google.com/storage/docs/json_api/v1/status-codes
 	if errors.As(err, &gapiErr) &&
 		(gapiErr.Code == http.StatusPreconditionFailed ||
 			gapiErr.Code == http.StatusNotModified) {

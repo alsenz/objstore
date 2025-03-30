@@ -350,6 +350,9 @@ func (c *Container) Upload(_ context.Context, name string, r io.Reader, options 
 		// Anything higher or equal to chunk size so the SLO is used.
 		size = c.chunkSize
 	}
+
+	uploadOpts := objstore.ApplyObjectUploadOptions(options...)
+
 	var file io.WriteCloser
 	if size >= c.chunkSize {
 		opts := swift.LargeObjectOpts{
@@ -358,6 +361,7 @@ func (c *Container) Upload(_ context.Context, name string, r io.Reader, options 
 			ChunkSize:        c.chunkSize,
 			SegmentContainer: c.segmentsContainer,
 			CheckHash:        true,
+			ContentType:      uploadOpts.ContentType,
 		}
 		if c.useDynamicLargeObjects {
 			if file, err = c.connection.DynamicLargeObjectCreateFile(&opts); err != nil {
@@ -369,7 +373,7 @@ func (c *Container) Upload(_ context.Context, name string, r io.Reader, options 
 			}
 		}
 	} else {
-		if file, err = c.connection.ObjectCreate(c.name, name, true, "", "", swift.Headers{}); err != nil {
+		if file, err = c.connection.ObjectCreate(c.name, name, true, "", uploadOpts.ContentType, swift.Headers{}); err != nil {
 			return errors.Wrap(err, "create file")
 		}
 	}

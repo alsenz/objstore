@@ -7,7 +7,6 @@ package gcs
 import (
 	"context"
 	"fmt"
-	"google.golang.org/api/googleapi"
 	"io"
 	"net/http"
 	"runtime"
@@ -22,6 +21,7 @@ import (
 	"github.com/prometheus/common/version"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 	htransport "google.golang.org/api/transport/http"
 	"google.golang.org/grpc/codes"

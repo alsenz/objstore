@@ -395,6 +395,7 @@ func (b *Bucket) checkConditions(name string, params objstore.UploadObjectParams
 }
 
 func (b *Bucket) SupportedObjectUploadOptions() []objstore.ObjectUploadOptionType {
+	//TODO - no! This needs to be xattr support check
 	if runtime.GOOS == "windows" {
 		// Moves are not guaranteed to be atomic
 		return []objstore.ObjectUploadOptionType{}

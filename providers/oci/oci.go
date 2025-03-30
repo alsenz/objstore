@@ -215,6 +215,11 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 		req.UploadRequest.PartSize = &b.partSize
 	}
 
+	uploadOptions := objstore.ApplyObjectUploadOptions(options...)
+	if uploadOptions.ContentType != "" {
+		req.UploadRequest.ContentType = &uploadOptions.ContentType
+	}
+
 	uploadManager := transfer.NewUploadManager()
 	_, err = uploadManager.UploadStream(ctx, req)
 

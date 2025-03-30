@@ -266,7 +266,8 @@ var ErrUploadOptionInvalid = errors.New("upload option is invalid")
 type ObjectUploadOptionType int
 
 const (
-	IfNotExists ObjectUploadOptionType = iota
+	ContentType ObjectUploadOptionType = iota
+	IfNotExists
 	IfMatch
 	IfNotMatch
 )
@@ -276,12 +277,21 @@ type ObjectUploadOption struct {
 	Apply func(params *UploadObjectParams)
 }
 
-// TODO see if we can make this private
 // UploadObjectParams hold concurrency and conditional write attribute metadata
 type UploadObjectParams struct {
+	ContentType string
 	IfNotExists bool
 	IfNotMatch  bool
 	Condition   *ObjectVersion
+}
+
+func WithContentType(contentType string) ObjectUploadOption {
+	return ObjectUploadOption{
+		Type: ContentType,
+		Apply: func(params *UploadObjectParams) {
+			params.ContentType = contentType
+		},
+	}
 }
 
 // TODO document

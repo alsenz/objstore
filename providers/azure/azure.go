@@ -5,7 +5,6 @@ package azure
 
 import (
 	"context"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"io"
 	"net/http"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
@@ -385,15 +385,15 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 		return err
 	}
 
-	params := objstore.ApplyUploadOptions(options...)
+	uploadOptions := objstore.ApplyUploadOptions(options...)
 
 	var conds *blob.ModifiedAccessConditions = nil
-	if params.Condition != nil {
-		if params.Condition.Type != objstore.ETag {
+	if uploadOptions.Condition != nil {
+		if uploadOptions.Condition.Type != objstore.ETag {
 			return errConditionInvalid
 		}
-		eTag := azcore.ETag(params.Condition.Value)
-		if params.IfNotMatch {
+		eTag := azcore.ETag(uploadOptions.Condition.Value)
+		if uploadOptions.IfNotMatch {
 			conds = &blob.ModifiedAccessConditions{
 				IfNoneMatch: &eTag,
 			}
@@ -402,7 +402,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 				IfMatch: &eTag,
 			}
 		}
-	} else if params.IfNotExists {
+	} else if uploadOptions.IfNotExists {
 		eTag := azcore.ETag("*")
 		conds = &blob.ModifiedAccessConditions{
 			IfNoneMatch: &eTag,
@@ -414,6 +414,9 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 	opts := &blockblob.UploadStreamOptions{
 		BlockSize:   3 * 1024 * 1024,
 		Concurrency: 4,
+		HTTPHeaders: &blob.HTTPHeaders{
+			BlobContentType: &uploadOptions.ContentType,
+		},
 	}
 	if conds != nil {
 		opts.AccessConditions = &blob.AccessConditions{

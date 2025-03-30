@@ -81,17 +81,19 @@ func (b *Bucket) Upload(_ context.Context, name string, r io.Reader, options ...
 		return errors.Wrapf(err, "failed to get size apriori to upload %s", name)
 	}
 
+	uploadOpts := objstore.ApplyObjectUploadOptions(options...)
+
 	chunksnum, lastslice := int(math.Floor(float64(size)/PartSize)), size%PartSize
 
 	ncloser := io.NopCloser(r)
 	switch chunksnum {
 	case 0:
-		if err := b.bucket.PutObject(name, ncloser); err != nil {
+		if err := b.bucket.PutObject(name, ncloser, oss.ContentType(uploadOpts.ContentType)); err != nil {
 			return errors.Wrap(err, "failed to upload oss object")
 		}
 	default:
 		{
-			init, err := b.bucket.InitiateMultipartUpload(name)
+			init, err := b.bucket.InitiateMultipartUpload(name, oss.ContentType(uploadOpts.ContentType))
 			if err != nil {
 				return errors.Wrap(err, "failed to initiate multi-part upload")
 			}

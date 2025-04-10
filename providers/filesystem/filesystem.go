@@ -15,7 +15,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 
 	"github.com/thanos-io/objstore"
@@ -302,9 +301,9 @@ func tryOpenFile(name string, ifNotExists bool) (exists bool, err error) {
 }
 
 // Upload writes the file specified in src to into the memory.
-func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.ObjectUploadOption) (err error) {
+func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, opts ...objstore.ObjectUploadOption) (err error) {
 
-	if err := objstore.ValidateUploadOptions(b.SupportedObjectUploadOptions(), options...); err != nil {
+	if err := objstore.ValidateUploadOptions(b.SupportedObjectUploadOptions(), opts...); err != nil {
 		return err
 	}
 
@@ -318,7 +317,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 		return err
 	}
 
-	params := objstore.ApplyObjectUploadOptions(options...)
+	params := objstore.ApplyObjectUploadOptions(opts...)
 
 	// Filesystem provider for debugging & troubleshooting uses a swap file as a file lock.
 	swf, err := openSwap(swap)
@@ -395,12 +394,10 @@ func (b *Bucket) checkConditions(name string, params objstore.UploadObjectParams
 }
 
 func (b *Bucket) SupportedObjectUploadOptions() []objstore.ObjectUploadOptionType {
-	//TODO - no! This needs to be xattr support check
-	if runtime.GOOS == "windows" {
-		// Moves are not guaranteed to be atomic
-		return []objstore.ObjectUploadOptionType{}
+	if xattr.XATTR_SUPPORTED {
+		return []objstore.ObjectUploadOptionType{objstore.IfNotExists, objstore.IfMatch, objstore.IfNotMatch}
 	}
-	return []objstore.ObjectUploadOptionType{objstore.IfNotExists, objstore.IfMatch, objstore.IfNotMatch}
+	return []objstore.ObjectUploadOptionType{}
 }
 
 func isDirEmpty(name string) (ok bool, err error) {

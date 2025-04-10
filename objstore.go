@@ -62,7 +62,7 @@ type Bucket interface {
 
 	// Upload the contents of the reader as an object into the bucket.
 	// Upload should be idempotent.
-	Upload(ctx context.Context, name string, r io.Reader, options ...ObjectUploadOption) error
+	Upload(ctx context.Context, name string, r io.Reader, opts ...ObjectUploadOption) error
 
 	// SupportedObjectUploadOptions returns a list of ObjectUploadOptions supported by the underlying provider.
 	SupportedObjectUploadOptions() []ObjectUploadOptionType
@@ -122,7 +122,7 @@ type BucketReader interface {
 	// IsAccessDeniedErr returns true if access to object is denied.
 	IsAccessDeniedErr(err error) bool
 
-	// IsConditionNotMet returns true if an ObjectUploadOption condition parameter (IfNotExists, IfMatch, IfNotMatch) was not met
+	// IsConditionNotMetErr returns true if an ObjectUploadOption condition parameter (IfNotExists, IfMatch, IfNotMatch) was not met
 	IsConditionNotMetErr(err error) bool
 
 	// Attributes returns information about the specified object.
@@ -263,6 +263,7 @@ func applyUploadOptions(options ...UploadOption) uploadParams {
 var ErrUploadOptionNotSupported = errors.New("upload option is not supported")
 var ErrUploadOptionInvalid = errors.New("upload option is invalid")
 
+// ObjectUploadOptionType is used for type-safe option support checking of ObjectUpload options
 type ObjectUploadOptionType int
 
 const (
@@ -272,12 +273,14 @@ const (
 	IfNotMatch
 )
 
+// ObjectUploadOption configures UploadObjectParams
 type ObjectUploadOption struct {
 	Type  ObjectUploadOptionType
 	Apply func(params *UploadObjectParams)
 }
 
-// UploadObjectParams hold concurrency and conditional write attribute metadata
+// UploadObjectParams hold content-type and conditional write attribute metadata for upload operations that are
+// supported by some provider implementations.
 type UploadObjectParams struct {
 	ContentType string
 	IfNotExists bool
@@ -285,6 +288,7 @@ type UploadObjectParams struct {
 	Condition   *ObjectVersion
 }
 
+// WithContentType sets the content type of the object upload operation
 func WithContentType(contentType string) ObjectUploadOption {
 	return ObjectUploadOption{
 		Type: ContentType,
@@ -294,7 +298,8 @@ func WithContentType(contentType string) ObjectUploadOption {
 	}
 }
 
-// TODO document
+// WithIfNotExists if supported by the provider, only writes the object if the object does not already exist.
+// When supported by providers this operation is usually atomic, however this is dependent on the provider.
 func WithIfNotExists() ObjectUploadOption {
 	return ObjectUploadOption{
 		Type: IfNotExists,
@@ -304,7 +309,8 @@ func WithIfNotExists() ObjectUploadOption {
 	}
 }
 
-// TODO document
+// WithIfMatch if supported by the provider, only writes the object if the ETag value of the object in S3 matches the provided value,
+// otherwise, the operation fails.
 func WithIfMatch(ver *ObjectVersion) ObjectUploadOption {
 	return ObjectUploadOption{
 		Type: IfMatch,
@@ -314,7 +320,8 @@ func WithIfMatch(ver *ObjectVersion) ObjectUploadOption {
 	}
 }
 
-// TODO document
+// WithIfNotMatch if supported by the provider, only writes the object if the ETag value of the object in S3 does *not* match the provided value,
+// otherwise, the operation fails.
 func WithIfNotMatch(ver *ObjectVersion) ObjectUploadOption {
 	return ObjectUploadOption{
 		Type: IfNotMatch,
@@ -325,9 +332,9 @@ func WithIfNotMatch(ver *ObjectVersion) ObjectUploadOption {
 	}
 }
 
-// TODO document
-func ValidateUploadOptions(supportedOptions []ObjectUploadOptionType, options ...ObjectUploadOption) error {
-	for _, opt := range options {
+// ValidateUploadOptions ensures that only supported options are passed as options
+func ValidateUploadOptions(supportedOptions []ObjectUploadOptionType, opts ...ObjectUploadOption) error {
+	for _, opt := range opts {
 		if !slices.Contains(supportedOptions, opt.Type) {
 			return fmt.Errorf("%w: %d", ErrUploadOptionNotSupported, opt.Type)
 		}
@@ -342,10 +349,10 @@ func ValidateUploadOptions(supportedOptions []ObjectUploadOptionType, options ..
 	return nil
 }
 
-// TODO document
-func ApplyObjectUploadOptions(options ...ObjectUploadOption) UploadObjectParams {
+// ApplyObjectUploadOptions creates UploadObjectParams from the options
+func ApplyObjectUploadOptions(opts ...ObjectUploadOption) UploadObjectParams {
 	out := UploadObjectParams{}
-	for _, opt := range options {
+	for _, opt := range opts {
 		opt.Apply(&out)
 	}
 	return out
@@ -362,16 +369,20 @@ type ObjectAttributes struct {
 	Version *ObjectVersion `json:"version,omitempty"`
 }
 
-// TODO documentation in general for ObjectVersion
+// ObjectVersionType is used to specify the type of object version used by the underlying provider
 type ObjectVersionType int
 
 const (
+	// Generation the provider supports a monotonically increasing integer version
 	Generation ObjectVersionType = iota
-	ETag       ObjectVersionType = iota
+	// ETag the provider supports a hash or checksum version
+	ETag ObjectVersionType = iota
 )
 
 type ObjectVersion struct {
-	Type  ObjectVersionType
+	// Type is the type of object version supported by the provider
+	Type ObjectVersionType
+	// Value is a string representation of the version data from the provider
 	Value string
 }
 
@@ -480,14 +491,14 @@ func UploadDir(ctx context.Context, logger log.Logger, bkt Bucket, srcdir, dstdi
 
 // UploadFile uploads the file with the given name to the bucket.
 // It is a caller responsibility to clean partial upload in case of failure.
-func UploadFile(ctx context.Context, logger log.Logger, bkt Bucket, src, dst string, options ...ObjectUploadOption) error {
+func UploadFile(ctx context.Context, logger log.Logger, bkt Bucket, src, dst string, opts ...ObjectUploadOption) error {
 	r, err := os.Open(filepath.Clean(src))
 	if err != nil {
 		return errors.Wrapf(err, "open file %s", src)
 	}
 	defer logerrcapture.Do(logger, r.Close, "close file %s", src)
 
-	if err := bkt.Upload(ctx, dst, r, options...); err != nil {
+	if err := bkt.Upload(ctx, dst, r, opts...); err != nil {
 		return errors.Wrapf(err, "upload file %s as %s", src, dst)
 	}
 	level.Debug(logger).Log("msg", "uploaded file", "from", src, "dst", dst, "bucket", bkt.Name())
@@ -864,7 +875,7 @@ func (b *metricBucket) Exists(ctx context.Context, name string) (bool, error) {
 	return ok, nil
 }
 
-func (b *metricBucket) Upload(ctx context.Context, name string, r io.Reader, options ...ObjectUploadOption) error {
+func (b *metricBucket) Upload(ctx context.Context, name string, r io.Reader, opts ...ObjectUploadOption) error {
 	const op = OpUpload
 	b.metrics.ops.WithLabelValues(op).Inc()
 
@@ -882,7 +893,7 @@ func (b *metricBucket) Upload(ctx context.Context, name string, r io.Reader, opt
 		b.metrics.opsTransferredBytes,
 	)
 	defer trc.Close()
-	err := b.bkt.Upload(ctx, name, trc, options...)
+	err := b.bkt.Upload(ctx, name, trc, opts...)
 	if err != nil {
 		if !b.metrics.isOpFailureExpected(err) && ctx.Err() != context.Canceled {
 			b.metrics.opsFailures.WithLabelValues(op).Inc()

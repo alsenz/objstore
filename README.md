@@ -1,4 +1,4 @@
-<p align="center"><img src="Thanos-logo_fullmedium.png" alt="Thanos Logo"></p>
+ <p align="center"><img src="Thanos-logo_fullmedium.png" alt="Thanos Logo"></p>
 
 [![Latest Release](https://img.shields.io/github/release/thanos-io/objstore.svg?style=flat-square)](https://github.com/thanos-io/objstore/releases/latest) [![Slack](https://img.shields.io/badge/join%20slack-%23thanos-brightgreen.svg)](https://slack.cncf.io/)
 
@@ -59,7 +59,10 @@ type Bucket interface {
 
 	// Upload the contents of the reader as an object into the bucket.
 	// Upload should be idempotent.
-	Upload(ctx context.Context, name string, r io.Reader) error
+	Upload(ctx context.Context, name string, r io.Reader, options ...ObjectUploadOption) error
+	
+	// SupportedObjectUploadOptions returns a list of ObjectUploadOptions supported by the underlying provider. 
+	SupportedObjectUploadOptions() []ObjectUploadOptionType
 
 	// Delete removes the object with the given name.
 	// If object does not exist in the moment of deletion, Delete should throw error.
@@ -153,6 +156,18 @@ Current object storage client implementations:
 **Missing support to some object storage?** Check out [how to add your client section](#how-to-add-a-new-client-to-thanos)
 
 NOTE: Currently Thanos requires strong consistency (write-read) for object store implementation for singleton Compaction purposes.
+
+#### Support for Conditional Writes
+
+Most, not all, object stores provide an API for write conditions. The `objstore` module partially supports this using `ObjectUploadOption` parameters in `Upload` of the `Bucket` interface.
+
+Version or etag metadata can be retrieved for use as write conditions from the `Attributes` method of `BucketReader`. Client should call `SupportedObjectUploadOptions` to validate which object upload options (`IfNotExists`, `IfMatch`, `IfNotMatch`) are supported by the provider.
+
+Providers with conditional write support include:
+
+- Google Cloud Storage (service documentation)
+- Azure Storage Buckets (service documentation)
+- Local Filesystem (for testing and demos), only with filesystems with extended attribute (`xattr`) support
 
 ##### S3
 

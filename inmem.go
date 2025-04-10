@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"hash/crc32"
 	"io"
 	"sort"
 	"strconv"
@@ -29,8 +28,6 @@ type InMemBucket struct {
 	objects map[string][]byte
 	attrs   map[string]ObjectAttributes
 }
-
-var table = crc32.MakeTable(crc32.IEEE)
 
 // NewInMemBucket returns a new in memory Bucket.
 // NOTE: Returned bucket is just a naive in memory bucket implementation. For test use cases only.
@@ -115,11 +112,11 @@ func (b *InMemBucket) Iter(_ context.Context, dir string, f func(string) error, 
 	return nil
 }
 
-func (i *InMemBucket) SupportedIterOptions() []IterOptionType {
+func (b *InMemBucket) SupportedIterOptions() []IterOptionType {
 	return []IterOptionType{Recursive}
 }
 
-func (i *InMemBucket) SupportedObjectUploadOptions() []ObjectUploadOptionType {
+func (b *InMemBucket) SupportedObjectUploadOptions() []ObjectUploadOptionType {
 	return []ObjectUploadOptionType{IfNotExists, IfMatch, IfNotMatch}
 }
 
@@ -224,11 +221,11 @@ func (b *InMemBucket) Attributes(_ context.Context, name string) (ObjectAttribut
 }
 
 // Upload writes the file specified in src to into the memory.
-func (b *InMemBucket) Upload(_ context.Context, name string, r io.Reader, options ...ObjectUploadOption) error {
+func (b *InMemBucket) Upload(_ context.Context, name string, r io.Reader, opts ...ObjectUploadOption) error {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
-	params := ApplyObjectUploadOptions(options...)
+	params := ApplyObjectUploadOptions(opts...)
 	generation := 0
 
 	if prev, ok := b.attrs[name]; ok {

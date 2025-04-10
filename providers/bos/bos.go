@@ -113,8 +113,8 @@ func (b *Bucket) Delete(_ context.Context, name string) error {
 }
 
 // Upload the contents of the reader as an object into the bucket.
-func (b *Bucket) Upload(_ context.Context, name string, r io.Reader, options ...objstore.ObjectUploadOption) error {
-	if err := objstore.ValidateUploadOptions(b.SupportedObjectUploadOptions(), options...); err != nil {
+func (b *Bucket) Upload(_ context.Context, name string, r io.Reader, opts ...objstore.ObjectUploadOption) error {
+	if err := objstore.ValidateUploadOptions(b.SupportedObjectUploadOptions(), opts...); err != nil {
 		return err
 	}
 
@@ -123,7 +123,7 @@ func (b *Bucket) Upload(_ context.Context, name string, r io.Reader, options ...
 		return errors.Wrapf(err, "getting size of %s", name)
 	}
 
-	uploadOpts := objstore.ApplyObjectUploadOptions(options...)
+	uploadOpts := objstore.ApplyObjectUploadOptions(opts...)
 	partNums, lastSlice := int(math.Floor(float64(size)/partSize)), size%partSize
 	if partNums == 0 {
 		body, err := bce.NewBodyFromSizedReader(r, lastSlice)
@@ -184,7 +184,7 @@ func (b *Bucket) Upload(_ context.Context, name string, r io.Reader, options ...
 }
 
 func (b *Bucket) SupportedObjectUploadOptions() []objstore.ObjectUploadOptionType {
-	return []objstore.ObjectUploadOptionType{}
+	return []objstore.ObjectUploadOptionType{objstore.ContentType}
 }
 
 func (b *Bucket) SupportedIterOptions() []objstore.IterOptionType {

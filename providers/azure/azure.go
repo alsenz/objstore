@@ -355,13 +355,17 @@ func (b *Bucket) Attributes(ctx context.Context, name string) (objstore.ObjectAt
 	if err != nil {
 		return objstore.ObjectAttributes{}, err
 	}
+	var version *objstore.ObjectVersion
+	if resp.ETag != nil {
+		version = &objstore.ObjectVersion{
+			Type:  objstore.ETag,
+			Value: string(*resp.ETag),
+		}
+	}
 	return objstore.ObjectAttributes{
 		Size:         *resp.ContentLength,
 		LastModified: *resp.LastModified,
-		Version: &objstore.ObjectVersion{
-			Type:  objstore.ETag,
-			Value: string(*resp.ETag),
-		},
+		Version:      version,
 	}, nil
 }
 
@@ -380,7 +384,6 @@ func (b *Bucket) Exists(ctx context.Context, name string) (bool, error) {
 
 // Upload the contents of the reader as an object into the bucket.
 func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.ObjectUploadOption) error {
-	//TODO: add support for azure before PR.
 	if err := objstore.ValidateUploadOptions(b.SupportedObjectUploadOptions(), options...); err != nil {
 		return err
 	}
@@ -430,7 +433,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 }
 
 func (b *Bucket) SupportedObjectUploadOptions() []objstore.ObjectUploadOptionType {
-	return []objstore.ObjectUploadOptionType{objstore.IfMatch, objstore.IfNotMatch, objstore.IfNotExists}
+	return []objstore.ObjectUploadOptionType{objstore.ContentType, objstore.IfMatch, objstore.IfNotMatch, objstore.IfNotExists}
 }
 
 // Delete removes the object with the given name.

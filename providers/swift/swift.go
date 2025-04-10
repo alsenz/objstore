@@ -340,8 +340,8 @@ func (c *Container) IsAccessDeniedErr(err error) bool {
 func (c *Container) IsConditionNotMetErr(_ error) bool { return false }
 
 // Upload writes the contents of the reader as an object into the container.
-func (c *Container) Upload(_ context.Context, name string, r io.Reader, options ...objstore.ObjectUploadOption) (err error) {
-	if err := objstore.ValidateUploadOptions(c.SupportedObjectUploadOptions(), options...); err != nil {
+func (c *Container) Upload(_ context.Context, name string, r io.Reader, opts ...objstore.ObjectUploadOption) (err error) {
+	if err := objstore.ValidateUploadOptions(c.SupportedObjectUploadOptions(), opts...); err != nil {
 		return err
 	}
 	size, err := objstore.TryToGetSize(r)
@@ -351,7 +351,7 @@ func (c *Container) Upload(_ context.Context, name string, r io.Reader, options 
 		size = c.chunkSize
 	}
 
-	uploadOpts := objstore.ApplyObjectUploadOptions(options...)
+	uploadOpts := objstore.ApplyObjectUploadOptions(opts...)
 
 	var file io.WriteCloser
 	if size >= c.chunkSize {
@@ -385,7 +385,7 @@ func (c *Container) Upload(_ context.Context, name string, r io.Reader, options 
 }
 
 func (c *Container) SupportedObjectUploadOptions() []objstore.ObjectUploadOptionType {
-	return []objstore.ObjectUploadOptionType{}
+	return []objstore.ObjectUploadOptionType{objstore.ContentType}
 }
 
 // Delete removes the object with the given name.

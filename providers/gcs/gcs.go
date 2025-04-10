@@ -337,12 +337,12 @@ func (b *Bucket) Exists(ctx context.Context, name string) (bool, error) {
 }
 
 // Upload writes the file specified in src to remote GCS location specified as target.
-func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.ObjectUploadOption) error {
-	if err := objstore.ValidateUploadOptions(b.SupportedObjectUploadOptions(), options...); err != nil {
+func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, opts ...objstore.ObjectUploadOption) error {
+	if err := objstore.ValidateUploadOptions(b.SupportedObjectUploadOptions(), opts...); err != nil {
 		return err
 	}
 
-	params := objstore.ApplyObjectUploadOptions(options...)
+	params := objstore.ApplyObjectUploadOptions(opts...)
 
 	obj := b.bkt.Object(name)
 	if params.Condition != nil {
@@ -368,6 +368,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 	// It uses whatever the default value https://pkg.go.dev/google.golang.org/cloud/storage#Writer
 	if b.chunkSize > 0 {
 		w.ChunkSize = b.chunkSize
+		w.ContentType = params.ContentType
 	}
 
 	if _, err := io.Copy(w, r); err != nil {
@@ -377,7 +378,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 }
 
 func (b *Bucket) SupportedObjectUploadOptions() []objstore.ObjectUploadOptionType {
-	return []objstore.ObjectUploadOptionType{objstore.IfNotExists, objstore.IfMatch, objstore.IfNotMatch}
+	return []objstore.ObjectUploadOptionType{objstore.ContentType, objstore.IfNotExists, objstore.IfMatch, objstore.IfNotMatch}
 }
 
 // Delete removes the object with the given name.

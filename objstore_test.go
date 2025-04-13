@@ -578,9 +578,9 @@ type mockBucket struct {
 	getRange func(ctx context.Context, name string, off, length int64) (io.ReadCloser, error)
 }
 
-func (b *mockBucket) Upload(ctx context.Context, name string, r io.Reader, options ...ObjectUploadOption) error {
+func (b *mockBucket) Upload(ctx context.Context, name string, r io.Reader, opts ...ObjectUploadOption) error {
 	if b.upload != nil {
-		return b.upload(ctx, name, r, options...)
+		return b.upload(ctx, name, r, opts...)
 	}
 	return errors.New("Upload has not been mocked")
 }

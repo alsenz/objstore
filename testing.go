@@ -347,12 +347,7 @@ func AcceptanceTest(t *testing.T, bkt Bucket) AcceptanceStats {
 		testutil.Ok(t, bkt.Upload(ctx, "obj_9.some", strings.NewReader("@test-data9@")))
 		firstAttrs, err := bkt.Attributes(ctx, "obj_9.some")
 		testutil.Ok(t, err)
-		// Can't write if the object versions match
-		if firstAttrs.Version != nil {
-			fmt.Println("firstAttrs", firstAttrs.Version.Value)
-		}
 		err = bkt.Upload(ctx, "obj_9.some", strings.NewReader("@test-data9.2@"), WithIfNotMatch(firstAttrs.Version))
-		fmt.Println("err", err)
 		testutil.NotOk(t, err)
 		testutil.Assert(t, bkt.IsConditionNotMetErr(err))
 		// Update the object

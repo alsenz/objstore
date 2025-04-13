@@ -165,9 +165,10 @@ Version or etag metadata can be retrieved for use as write conditions from the `
 
 Providers with conditional write support include:
 
-- Google Cloud Storage (service documentation)
-- Azure Storage Buckets (service documentation)
-- Local Filesystem (for testing and demos), only with filesystems with extended attribute (`xattr`) support
+- Google Cloud Storage ([cloud provider documentation](https://cloud.google.com/storage/docs/request-preconditions)))
+- Azure Storage Buckets ([cloud provider documentation](https://learn.microsoft.com/en-us/rest/api/storageservices/specifying-conditional-headers-for-blob-service-operations))
+- S3 ([cloud provider documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html)). `IfNotMatch` is currently not supported by AWS.
+- Local Filesystem (for testing and demos). Only supported by filesystems with extended attribute (`xattr`) support.
 
 ##### S3
 

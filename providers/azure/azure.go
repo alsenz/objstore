@@ -387,6 +387,9 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, uploadOpt
 	if err := objstore.ValidateUploadOptions(b.SupportedObjectUploadOptions(), uploadOpts...); err != nil {
 		return err
 	}
+	
+	level.Debug(b.logger).Log("msg", "uploading blob", "blob", name)
+	blobClient := b.containerClient.NewBlockBlobClient(name)
 
 	uploadOptions := objstore.ApplyObjectUploadOptions(uploadOpts...)
 
@@ -412,8 +415,6 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, uploadOpt
 		}
 	}
 
-	level.Debug(b.logger).Log("msg", "uploading blob", "blob", name)
-	blobClient := b.containerClient.NewBlockBlobClient(name)
 	opts := &blockblob.UploadStreamOptions{
 		BlockSize:   3 * 1024 * 1024,
 		Concurrency: 4,

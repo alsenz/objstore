@@ -402,7 +402,7 @@ func (b *Bucket) IsAccessDeniedErr(err error) bool {
 // IsConditionNotMetErr returns true if the response status code was Precondition Failed or Not Modified
 func (b *Bucket) IsConditionNotMetErr(err error) bool {
 	var gapiErr *googleapi.Error
-	//From: https://cloud.google.com/storage/docs/json_api/v1/status-codes
+	// See https://cloud.google.com/storage/docs/json_api/v1/status-codes
 	if errors.As(err, &gapiErr) &&
 		(gapiErr.Code == http.StatusPreconditionFailed ||
 			gapiErr.Code == http.StatusNotModified) {

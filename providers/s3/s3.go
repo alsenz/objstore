@@ -578,7 +578,6 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, opts ...o
 	if uploadOpts.IfNotExists {
 		putOpts.SetMatchETagExcept("*")
 	} else if uploadOpts.Condition != nil {
-		println("S3 version: ", uploadOpts.Condition.Value)
 		// If-None-Match with header values other than "*" is not supported by AWS yet.
 		if !uploadOpts.IfNotMatch {
 			putOpts.SetMatchETag(uploadOpts.Condition.Value)

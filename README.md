@@ -1,4 +1,4 @@
- <p align="center"><img src="Thanos-logo_fullmedium.png" alt="Thanos Logo"></p>
+<p align="center"><img src="Thanos-logo_fullmedium.png" alt="Thanos Logo"></p>
 
 [![Latest Release](https://img.shields.io/github/release/thanos-io/objstore.svg?style=flat-square)](https://github.com/thanos-io/objstore/releases/latest) [![Slack](https://img.shields.io/badge/join%20slack-%23thanos-brightgreen.svg)](https://slack.cncf.io/)
 

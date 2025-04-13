@@ -342,23 +342,23 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, opts ...o
 		return err
 	}
 
-	params := objstore.ApplyObjectUploadOptions(opts...)
+	uploadOpts := objstore.ApplyObjectUploadOptions(opts...)
 
 	obj := b.bkt.Object(name)
-	if params.Condition != nil {
-		if params.Condition.Type != objstore.Generation {
+	if uploadOpts.Condition != nil {
+		if uploadOpts.Condition.Type != objstore.Generation {
 			return errConditionInvalid
 		}
-		g8n, err := strconv.Atoi(params.Condition.Value)
+		g8n, err := strconv.Atoi(uploadOpts.Condition.Value)
 		if err != nil {
 			return err
 		}
-		if params.IfNotMatch {
+		if uploadOpts.IfNotMatch {
 			obj = obj.If(storage.Conditions{GenerationNotMatch: int64(g8n)})
 		} else {
 			obj = obj.If(storage.Conditions{GenerationMatch: int64(g8n)})
 		}
-	} else if params.IfNotExists {
+	} else if uploadOpts.IfNotExists {
 		obj = obj.If(storage.Conditions{DoesNotExist: true})
 	}
 
@@ -368,7 +368,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, opts ...o
 	// It uses whatever the default value https://pkg.go.dev/google.golang.org/cloud/storage#Writer
 	if b.chunkSize > 0 {
 		w.ChunkSize = b.chunkSize
-		w.ContentType = params.ContentType
+		w.ContentType = uploadOpts.ContentType
 	}
 
 	if _, err := io.Copy(w, r); err != nil {

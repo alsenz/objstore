@@ -18,7 +18,6 @@ import (
 )
 
 var errNotFound = errors.New("inmem: object not found")
-
 var errConditionNotMet = errors.New("inmem: condition not met")
 
 // InMemBucket implements the objstore.Bucket interfaces against local memory.
@@ -255,7 +254,6 @@ func (b *InMemBucket) Upload(_ context.Context, name string, r io.Reader, opts .
 	if err != nil {
 		return err
 	}
-
 	b.objects[name] = body
 	b.attrs[name] = ObjectAttributes{
 		Size:         int64(len(body)),

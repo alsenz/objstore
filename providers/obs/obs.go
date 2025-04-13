@@ -137,8 +137,8 @@ func (b *Bucket) Delete(ctx context.Context, name string) error {
 }
 
 // Upload the contents of the reader as an object into the bucket.
-func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.ObjectUploadOption) error {
-	if err := objstore.ValidateUploadOptions(b.SupportedObjectUploadOptions(), options...); err != nil {
+func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, opts ...objstore.ObjectUploadOption) error {
+	if err := objstore.ValidateUploadOptions(b.SupportedObjectUploadOptions(), opts...); err != nil {
 		return err
 	}
 	size, err := objstore.TryToGetSize(r)
@@ -151,7 +151,7 @@ func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options .
 		return errors.New("object size must be provided")
 	}
 
-	uploadOpts := objstore.ApplyObjectUploadOptions(options...)
+	uploadOpts := objstore.ApplyObjectUploadOptions(opts...)
 	if size <= MinMultipartUploadSize {
 		err = b.putObjectSingle(name, r, uploadOpts)
 		if err != nil {

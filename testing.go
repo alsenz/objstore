@@ -268,7 +268,7 @@ func AcceptanceTest(t *testing.T, bkt Bucket) AcceptanceStats {
 	sort.Strings(seen)
 	testutil.Equals(t, expected, seen)
 
-	testutil.Ok(t, bkt.Upload(ctx, "obj_6.som", bytes.NewReader(make([]byte /*10241024*200*/, 64))))
+	testutil.Ok(t, bkt.Upload(ctx, "obj_6.som", bytes.NewReader(make([]byte, 1024*1024*200))))
 	testutil.Ok(t, bkt.Delete(ctx, "obj_6.som"))
 
 	stats := AcceptanceStats{
@@ -429,9 +429,9 @@ func (d *delayingBucket) Exists(ctx context.Context, name string) (bool, error) 
 	return d.bkt.Exists(ctx, name)
 }
 
-func (d *delayingBucket) Upload(ctx context.Context, name string, r io.Reader, options ...ObjectUploadOption) error {
+func (d *delayingBucket) Upload(ctx context.Context, name string, r io.Reader, opts ...ObjectUploadOption) error {
 	time.Sleep(d.delay)
-	return d.bkt.Upload(ctx, name, r, options...)
+	return d.bkt.Upload(ctx, name, r, opts...)
 }
 
 func (d *delayingBucket) Delete(ctx context.Context, name string) error {

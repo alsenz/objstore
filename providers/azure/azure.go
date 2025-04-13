@@ -383,12 +383,12 @@ func (b *Bucket) Exists(ctx context.Context, name string) (bool, error) {
 }
 
 // Upload the contents of the reader as an object into the bucket.
-func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.ObjectUploadOption) error {
-	if err := objstore.ValidateUploadOptions(b.SupportedObjectUploadOptions(), options...); err != nil {
+func (b *Bucket) Upload(ctx context.Context, name string, r io.Reader, uploadOpts ...objstore.ObjectUploadOption) error {
+	if err := objstore.ValidateUploadOptions(b.SupportedObjectUploadOptions(), uploadOpts...); err != nil {
 		return err
 	}
 
-	uploadOptions := objstore.ApplyObjectUploadOptions(options...)
+	uploadOptions := objstore.ApplyObjectUploadOptions(uploadOpts...)
 
 	var conds *blob.ModifiedAccessConditions = nil
 	if uploadOptions.Condition != nil {

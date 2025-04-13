@@ -114,10 +114,10 @@ func (t TracingBucket) Attributes(ctx context.Context, name string) (attrs objst
 	return
 }
 
-func (t TracingBucket) Upload(ctx context.Context, name string, r io.Reader, options ...objstore.ObjectUploadOption) (err error) {
+func (t TracingBucket) Upload(ctx context.Context, name string, r io.Reader, opts ...objstore.ObjectUploadOption) (err error) {
 	doWithSpan(ctx, "bucket_upload", func(spanCtx context.Context, span opentracing.Span) {
 		span.LogKV("name", name)
-		err = t.bkt.Upload(spanCtx, name, r, options...)
+		err = t.bkt.Upload(spanCtx, name, r, opts...)
 	})
 	return
 }
